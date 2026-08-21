@@ -1,0 +1,669 @@
+// Nightlife Automatico — esquema multi-tenant
+//
+// Reglas del esquema:
+//  1. Toda tabla con datos de un club lleva clubId indexado, aunque pudiera
+//     deducirse por join. Hace el filtro barato y el fallo evidente.
+//  2. Ningún dato externo se guarda como valor suelto: va como DataPoint con
+//     source, confidence, lastUpdated y ttlSeconds.
+//  3. Los precios no se sobreescriben: se cierra el vigente y se abre otro.
+//     Sin histórico no se puede responder "¿cuánto costaba?" sin inventar.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────── enums
+
+enum GlobalRole {
+  USER
+  SUPER_ADMIN
+}
+
+enum ClubRole {
+  CLUB_OWNER
+  CLUB_MANAGER
+}
+
+enum ClubStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum PromoterClubStatus {
+  PENDING
+  APPROVED
+  SUSPENDED
+  REJECTED
+}
+
+enum EventStatus {
+  SYNCING
+  ACTIVE
+  PAUSED
+  SOLD_OUT
+  ENDED
+  ERROR
+}
+
+enum SyncStatus {
+  NEVER
+  OK
+  STALE
+  FAILED
+  UNSUPPORTED
+}
+
+enum TicketTypeStatus {
+  AVAILABLE
+  SOLD_OUT
+  UPCOMING
+  CLOSED
+  UNKNOWN
+}
+
+enum DataSource {
+  FOURVENUES
+  CLUB_CONFIG
+  FAQ
+  VIP_CONFIG
+  CONVERSATION_CONTEXT
+  MANUAL
+}
+
+enum ConversationStatus {
+  AI_ACTIVE
+  WAITING_HUMAN
+  HUMAN_ACTIVE
+  POTENTIAL_PURCHASE
+  CLOSED
+}
+
+enum MessageRole {
+  CUSTOMER
+  ASSISTANT
+  HUMAN_AGENT
+  SYSTEM
+}
+
+enum ChannelType {
+  WEBCHAT
+  WHATSAPP
+  INSTAGRAM
+}
+
+enum ChannelStatus {
+  DISCONNECTED
+  CONNECTED
+  ERROR
+}
+
+enum FollowUpStatus {
+  SUGGESTED
+  DISMISSED
+  SENT
+}
+
+enum SubscriptionOwnerType {
+  CLUB
+  PROMOTER
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+// ─────────────────────────────────────────────────────────── identidad
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  name         String
+  globalRole   GlobalRole @default(USER)
+  locale       String     @default("es")
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  clubMemberships ClubMember[]
+  promoter        Promoter?
+  auditLogs       AuditLog[]
+
+  @@map("users")
+}
+
+model Club {
+  id           String     @id @default(cuid())
+  slug         String     @unique
+  name         String
+  description  String?
+  city         String
+  address      String?
+  phone        String?
+  whatsapp     String?
+  instagram    String?
+  website      String?
+  timezone     String     @default("Europe/Madrid")
+  openingHours String?
+  minAge       Int?
+  dressCode    String?
+  policies     String?
+  status       ClubStatus @default(ACTIVE)
+  botEnabled   Boolean    @default(false)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  members       ClubMember[]
+  events        Event[]
+  promoters     PromoterClub[]
+  brand         BrandSettings?
+  faqs          FAQ[]
+  knowledge     KnowledgeItem[]
+  vipOptions    VIPOption[]
+  channels      Channel[]
+  customers     Customer[]
+  conversations Conversation[]
+  aiConfig      AiConfig?
+
+  @@index([status])
+  @@map("clubs")
+}
+
+model ClubMember {
+  id        String   @id @default(cuid())
+  userId    String
+  clubId    String
+  role      ClubRole
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, clubId])
+  @@index([clubId])
+  @@map("club_members")
+}
+
+model Promoter {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  slug        String   @unique
+  displayName String
+  photoUrl    String?
+  bio         String?
+  city        String?
+  instagram   String?
+  whatsapp    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clubs         PromoterClub[]
+  events        PromoterEvent[]
+  conversations Conversation[]
+
+  @@map("promoters")
+}
+
+model PromoterClub {
+  id          String             @id @default(cuid())
+  promoterId  String
+  clubId      String
+  status      PromoterClubStatus @default(PENDING)
+  canEditEvents Boolean          @default(false)
+  requestedAt DateTime           @default(now())
+  approvedAt  DateTime?
+
+  promoter Promoter @relation(fields: [promoterId], references: [id], onDelete: Cascade)
+  club     Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@unique([promoterId, clubId])
+  @@index([clubId, status])
+  @@map("promoter_clubs")
+}
+
+model PromoterEvent {
+  id         String   @id @default(cuid())
+  promoterId String
+  eventId    String
+  clubId     String
+  // Etiqueta que se añade al enlace de checkout y que Fourvenues recibe tal
+  // cual. Nosotros la escribimos y no la leemos nunca de vuelta: sirve para
+  // que el club sepa en SU ticketera de dónde vino la venta. No es atribución
+  // nuestra, no alimenta ningún cálculo y no se muestra como métrica de ventas.
+  referralTag String?
+  // Telemetría interna de producto: cuántas veces se ha pulsado COMPRAR desde
+  // este link. Sirve para depurar y para saber si el producto funciona. NO es
+  // un contador de ventas ni se enseña al promoter como tal.
+  clickCount Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  promoter Promoter @relation(fields: [promoterId], references: [id], onDelete: Cascade)
+  event    Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([promoterId, eventId])
+  @@index([clubId])
+  @@map("promoter_events")
+}
+
+// ─────────────────────────────────────────────────────────── eventos
+
+model Event {
+  id          String      @id @default(cuid())
+  clubId      String
+  name        String
+  slug        String
+  description String?
+  startsAt    DateTime
+  doorsAt     DateTime?
+  endsAt      DateTime?
+  djLineup    String[]    @default([])
+  imageUrl    String?
+  ticketUrl   String?
+  status      EventStatus @default(ACTIVE)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  club           Club            @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  source         EventSource?
+  ticketTypes    TicketType[]
+  vipOptions     VIPOption[]
+  promoterEvents PromoterEvent[]
+
+  @@unique([clubId, slug])
+  @@index([clubId, startsAt])
+  @@index([clubId, status])
+  @@map("events")
+}
+
+model EventSource {
+  id           String     @id @default(cuid())
+  eventId      String     @unique
+  clubId       String
+  provider     String // "fourvenues-public" | "fourvenues-api" | "manual"
+  externalId   String?
+  sourceUrl    String?
+  lastSyncedAt DateTime?
+  syncStatus   SyncStatus @default(NEVER)
+  lastError    String?
+  refreshEverySeconds Int @default(900)
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([clubId])
+  @@index([syncStatus, lastSyncedAt])
+  @@map("event_sources")
+}
+
+model TicketType {
+  id         String           @id @default(cuid())
+  eventId    String
+  clubId     String
+  externalId String?
+  name       String
+  sortOrder  Int              @default(0)
+  status     TicketTypeStatus @default(UNKNOWN)
+  createdAt  DateTime         @default(now())
+
+  event  Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  prices TicketPrice[]
+
+  @@index([eventId, sortOrder])
+  @@index([clubId])
+  @@map("ticket_types")
+}
+
+// Histórico de precios. Nunca se hace UPDATE sobre el importe:
+// se cierra el vigente (validTo, isCurrent=false) y se inserta el nuevo.
+model TicketPrice {
+  id           String   @id @default(cuid())
+  ticketTypeId String
+  clubId       String
+  amountCents  Int
+  currency     String   @default("EUR")
+  isCurrent    Boolean  @default(true)
+  validFrom    DateTime @default(now())
+  validTo      DateTime?
+  source       DataSource @default(FOURVENUES)
+  confidence   Float      @default(0.9)
+
+  ticketType TicketType @relation(fields: [ticketTypeId], references: [id], onDelete: Cascade)
+
+  @@index([ticketTypeId, isCurrent])
+  @@index([clubId])
+  @@map("ticket_prices")
+}
+
+// Todo dato externo vive aquí con su procedencia y su caducidad.
+// El motor de IA solo puede afirmar lo que salga de un DataPoint fresco.
+model DataPoint {
+  id          String     @id @default(cuid())
+  clubId      String
+  entityType  String // "EVENT" | "TICKET_TYPE" | "CLUB"
+  entityId    String
+  field       String // "currentPrice" | "availability" | "dj" | ...
+  valueJson   Json
+  source      DataSource
+  confidence  Float
+  ttlSeconds  Int
+  lastUpdated DateTime   @default(now())
+
+  @@unique([entityType, entityId, field])
+  @@index([clubId, entityType, entityId])
+  @@map("data_points")
+}
+
+model VIPOption {
+  id             String   @id @default(cuid())
+  clubId         String
+  eventId        String?
+  name           String
+  description    String?
+  priceCents     Int?
+  currency       String   @default("EUR")
+  minPax         Int      @default(1)
+  maxPax         Int
+  includes       String[] @default([])
+  conditions     String?
+  bookingContact String?
+  isActive       Boolean  @default(true)
+  sortOrder      Int      @default(0)
+
+  club  Club   @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  event Event? @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([clubId, isActive])
+  @@index([eventId])
+  @@map("vip_options")
+}
+
+// ─────────────────────────────────────────────────────────── conocimiento
+
+model FAQ {
+  id        String   @id @default(cuid())
+  clubId    String
+  question  String
+  answer    String
+  keywords  String[] @default([])
+  intent    String?
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@index([clubId, isActive])
+  @@map("faqs")
+}
+
+model KnowledgeItem {
+  id       String   @id @default(cuid())
+  clubId   String
+  title    String
+  body     String
+  tags     String[] @default([])
+  isActive Boolean  @default(true)
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@index([clubId, isActive])
+  @@map("knowledge_items")
+}
+
+model AiConfig {
+  id              String  @id @default(cuid())
+  clubId          String  @unique
+  tone            String  @default("nightlife")
+  primaryLanguage String  @default("es")
+  autoDetectLanguage Boolean @default(true)
+  greeting        String?
+  handoffMessage  String?
+  offHoursMessage String?
+  dailyBudgetCents Int    @default(500)
+  spentTodayCents Int     @default(0)
+  budgetResetAt   DateTime @default(now())
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@map("ai_configs")
+}
+
+model BrandSettings {
+  id              String  @id @default(cuid())
+  clubId          String  @unique
+  logoUrl         String?
+  coverImageUrl   String?
+  faviconUrl      String?
+  primaryColor    String  @default("#FF2D6F")
+  secondaryColor  String  @default("#7C3AED")
+  backgroundColor String  @default("#0B0B10")
+  textColor       String  @default("#F5F3F7")
+  fontFamily      String  @default("Inter")
+  buttonStyle     String  @default("solid")
+  borderRadius    Int     @default(12)
+  customDomain    String? @unique
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@map("brand_settings")
+}
+
+// ─────────────────────────────────────────────────────────── conversación
+
+model Customer {
+  id                 String   @id @default(cuid())
+  clubId             String
+  channelType        ChannelType
+  // Identificador del cliente hasheado con sal por club (minimización GDPR).
+  externalHandleHash String
+  displayName        String?
+  locale             String   @default("es")
+  consentAt          DateTime?
+  consentSource      String?
+  createdAt          DateTime @default(now())
+
+  club          Club           @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+
+  @@unique([clubId, channelType, externalHandleHash])
+  @@index([clubId])
+  @@map("customers")
+}
+
+model Conversation {
+  id             String             @id @default(cuid())
+  clubId         String
+  promoterId     String?
+  customerId     String
+  channelId      String?
+  channelType    ChannelType        @default(WEBCHAT)
+  status         ConversationStatus @default(AI_ACTIVE)
+  lastIntent     String?
+  eventFocusId   String?
+  partySize      Int?
+  purchaseIntent Boolean            @default(false)
+  ctaClicked     Boolean            @default(false)
+  lastMessageAt  DateTime           @default(now())
+  createdAt      DateTime           @default(now())
+  // Retención GDPR: un job diario anonimiza lo que pasa de esta fecha.
+  expiresAt      DateTime
+
+  club     Club      @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  promoter Promoter? @relation(fields: [promoterId], references: [id], onDelete: SetNull)
+  customer Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  channel  Channel?  @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  messages Message[]
+  followUp FollowUp?
+
+  @@index([clubId, status])
+  @@index([clubId, lastMessageAt])
+  @@index([promoterId])
+  @@index([expiresAt])
+  @@map("conversations")
+}
+
+model Message {
+  id             String      @id @default(cuid())
+  conversationId String
+  clubId         String
+  role           MessageRole
+  content        String
+  intent         String?
+  // Provenance interno: de dónde salió cada afirmación. No se muestra al cliente.
+  provenanceJson Json?
+  model          String?
+  tokensIn       Int?
+  tokensOut      Int?
+  latencyMs      Int?
+  validationPassed Boolean?
+  createdAt      DateTime    @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@index([clubId])
+  @@map("messages")
+}
+
+model Channel {
+  id                   String        @id @default(cuid())
+  clubId               String
+  type                 ChannelType
+  status               ChannelStatus @default(DISCONNECTED)
+  externalAccountId    String?
+  // Cifrado en reposo (AES-GCM). Nunca sale al frontend.
+  credentialsEncrypted String?
+  webhookSecret        String?
+  createdAt            DateTime      @default(now())
+
+  club          Club           @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+
+  @@unique([clubId, type])
+  @@map("channels")
+}
+
+model FollowUp {
+  id               String         @id @default(cuid())
+  clubId           String
+  conversationId   String         @unique
+  promoterId       String?
+  suggestedMessage String
+  status           FollowUpStatus @default(SUGGESTED)
+  sentAt           DateTime?
+  sentByUserId     String?
+  createdAt        DateTime       @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([clubId, status])
+  @@map("follow_ups")
+}
+
+// ─────────────────────────────────────────────────────────── plataforma
+
+// ─────────────────────────────────────────────────────────── suscripciones
+//
+// MODELO COMERCIAL — la regla que gobierna todo lo de abajo:
+//
+//   CLUB      paga una suscripción a la plataforma (software)
+//   PROMOTER  paga una suscripción a la plataforma (software)
+//   CLIENTE   paga su entrada a Fourvenues
+//   FOURVENUES gestiona ticketing, cobro y cualquier liquidación
+//
+// La plataforma NUNCA toca el dinero de las entradas. No hay comisiones, ni
+// payouts, ni wallets, ni saldos, ni revenue sharing, ni liquidaciones al
+// promoter. El único dinero que existe en este esquema es el que un club o un
+// promoter nos paga a nosotros por usar el software.
+//
+// Si alguna vez aparece aquí un modelo tipo Payout, Commission o Balance, es
+// que el producto se ha desviado: somos una empresa de software, no un
+// intermediario financiero.
+
+model Plan {
+  id   String @id @default(cuid())
+  code String @unique // PROMOTER_FREE | PROMOTER_PRO | CLUB_STARTER | CLUB_PRO | CLUB_PREMIUM
+  name String
+  audience SubscriptionOwnerType
+  // Precio de NUESTRO software, no de las entradas.
+  priceCents Int     @default(0)
+  currency   String  @default("EUR")
+  interval   String  @default("month")
+  // Features y límites viven en datos para poder cambiar planes sin desplegar.
+  features Json
+  limits   Json
+  isActive Boolean @default(true)
+  sortOrder Int    @default(0)
+
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+model Subscription {
+  id        String                @id @default(cuid())
+  ownerType SubscriptionOwnerType
+  ownerId   String // clubId o promoterId
+  planId    String
+  status    SubscriptionStatus    @default(TRIALING)
+  // Referencia en la pasarela (Stripe en Fase 5). Cobramos software.
+  externalRef String?
+  startedAt DateTime              @default(now())
+  trialEndsAt DateTime?
+  currentPeriodEnd DateTime?
+  canceledAt DateTime?
+
+  plan Plan @relation(fields: [planId], references: [id])
+
+  @@unique([ownerType, ownerId])
+  @@index([status])
+  @@map("subscriptions")
+}
+
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  clubId     String?
+  action     String
+  targetType String?
+  targetId   String?
+  reason     String?
+  ip         String?
+  meta       Json?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([clubId, createdAt])
+  @@index([actorId, createdAt])
+  @@map("audit_logs")
+}
+
+// Observabilidad de IA. Sin texto del cliente: solo metadatos.
+model AiRequestLog {
+  id               String   @id @default(cuid())
+  clubId           String
+  promoterId       String?
+  conversationId   String?
+  intent           String?
+  resolvedBy       String // "ROUTER" | "FAQ" | "TEMPLATE" | "LLM"
+  sources          String[] @default([])
+  model            String?
+  tokensIn         Int?
+  tokensOut        Int?
+  latencyMs        Int?
+  validationPassed Boolean?
+  validationErrors String[] @default([])
+  error            String?
+  createdAt        DateTime @default(now())
+
+  @@index([clubId, createdAt])
+  @@map("ai_request_logs")
+}

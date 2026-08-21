@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Dos mundos visuales distintos y a propósito:
+ *
+ *  · Páginas públicas: las pinta el branding del club con estilos en línea.
+ *    Aquí solo se define el suelo para que nunca se vea un flash blanco.
+ *  · Dashboard: SaaS limpio, tokens propios, sin heredar el color del club.
+ */
+
+:root {
+  --dash-bg: #fbfafd;
+  --dash-surface: #ffffff;
+  --dash-line: #e6e1ee;
+  --dash-ink: #17131f;
+  --dash-muted: #6c6478;
+  --dash-accent: #a81352;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --dash-bg: #0f0c15;
+    --dash-surface: #181320;
+    --dash-line: #2c2439;
+    --dash-ink: #efeaf5;
+    --dash-muted: #948ba4;
+    --dash-accent: #ff5d97;
+  }
+}
+
+html,
+body {
+  background: var(--dash-bg);
+  color: var(--dash-ink);
+}
+
+/* Foco siempre visible: mucha gente usará esto con el móvil en una mano. */
+:focus-visible {
+  outline: 2px solid var(--dash-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

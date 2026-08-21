@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "_comment": [
+    "Typecheck del núcleo de dominio: core, ticketing, ai y auth.",
+    "Estos paquetes NO importan Next, React, Prisma ni Zod, así que se pueden",
+    "compilar y testear sin node_modules. Esa restricción es deliberada:",
+    "es lo que mantiene el dominio independiente del framework y del ORM.",
+    "Si este comando falla porque alguien importó una dependencia externa",
+    "desde el núcleo, la frontera se ha roto y hay que arreglarla, no relajar esto."
+  ],
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "types": [],
+    "paths": {
+      "@nightlife/core": ["./src/packages/core/index.ts"],
+      "@nightlife/core/*": ["./src/packages/core/*"],
+      "@nightlife/ticketing": ["./src/packages/ticketing/index.ts"],
+      "@nightlife/ticketing/*": ["./src/packages/ticketing/*"],
+      "@nightlife/ai": ["./src/packages/ai/index.ts"],
+      "@nightlife/ai/*": ["./src/packages/ai/*"],
+      "@nightlife/auth": ["./src/packages/auth/index.ts"],
+      "@nightlife/auth/*": ["./src/packages/auth/*"]
+    }
+  },
+  "include": [
+    "src/packages/core/**/*.ts",
+    "src/packages/ticketing/**/*.ts",
+    "src/packages/ai/**/*.ts",
+    "src/packages/auth/**/*.ts"
+  ]
+}
