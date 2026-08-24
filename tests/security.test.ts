@@ -8,7 +8,7 @@ import {
 } from "@nightlife/core/rbac";
 import { validateSlug, slugify, suggestSlugs, RESERVED_SLUGS } from "@nightlife/core/slug";
 import { hashPassword, verifyPassword, signSessionToken, verifySessionToken, hashCustomerHandle, signChatToken, verifyChatToken } from "@nightlife/auth/crypto";
-import { assertPublicUrl, assertPublicEventUrl, parseRobotsDisallow } from "@nightlife/ticketing/fourvenues";
+import { assertPublicUrl, assertPublicEventUrl, canonicalPublicEventUrl, parseRobotsDisallow } from "@nightlife/ticketing/fourvenues";
 
 const CLUB_A = "club_a";
 const CLUB_B = "club_b";
@@ -220,6 +220,17 @@ describe("límites de acceso a la fuente externa", () => {
     expect(assertPublicEventUrl("https://fourvenues.com/club-neon/events/summer-closing")).toMatch(
       /summer-closing/,
     );
+  });
+
+  it("acepta subdominios oficiales de Fourvenues", () => {
+    expect(assertPublicUrl("https" + "://site.fourvenues.com/es/sala-mon")).toMatch(/site\.fourvenues\.com/);
+  });
+
+  it("canoniza un evento sin tocar el enlace de checkout", () => {
+    const a = canonicalPublicEventUrl("https" + "://site.fourvenues.com/es/sala/events/closing?promoter=abc");
+    const c = canonicalPublicEventUrl("https" + "://site.fourvenues.com/es/sala/events/closing?promoter=xyz#tickets");
+    expect(a).toBe(c);
+    expect(a).not.toMatch(/promoter|tickets/);
   });
 
   it("rechaza rutas de zona privada antes de hacer la petición", () => {

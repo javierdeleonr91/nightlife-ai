@@ -33,3 +33,5 @@ export {
   type RedeemResult,
 } from "./invites";
 export { prisma as unsafePrismaForMigrationsOnly } from "./client";
+
+export { syncPromoterFourvenues, disablePromoterFourvenuesEvents, type PromoterFourvenuesSyncReport } from "./promoter-fourvenues-sync";

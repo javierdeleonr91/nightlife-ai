@@ -46,6 +46,7 @@ paso "5 · 010 + 011 (tablas de beta y pertenencia)"
 run -f "$M/010-beta-tables.sql"
 psql -d "$DB" -v ON_ERROR_STOP=1 -f "$M/011-rls-membership.sql" 2>&1 | grep -E 'NOTICE|ERROR' | clean
 run -f "$M/012-pilot-hardening.sql"
+run -f "$M/013-promoter-fourvenues-events.sql"
 
 paso "6 · seed de promoter"
 run -f "$T/seed-promoter.sql"
@@ -114,6 +115,7 @@ run -f "$R/prisma/rls-owner.sql"
 run -f "$M/010-beta-tables.sql"
 psql -d "$DB" -v ON_ERROR_STOP=1 -q -f "$M/011-rls-membership.sql" >/dev/null 2>&1
 run -f "$M/012-pilot-hardening.sql"
+run -f "$M/013-promoter-fourvenues-events.sql"
 run -f "$T/seed-promoter.sql"
 echo "reaplicado"
 

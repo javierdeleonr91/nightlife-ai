@@ -316,6 +316,7 @@ model Promoter {
   user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   clubs         PromoterClub[]
   events        PromoterEvent[]
+  fourvenuesEvents PromoterFourvenuesEvent[]
   conversations Conversation[]
   channels      Channel[]
 
@@ -406,6 +407,31 @@ model PromoterEvent {
   @@unique([promoterId, eventId])
   @@index([clubId])
   @@map("promoter_events")
+}
+
+model PromoterFourvenuesEvent {
+  id                String   @id @default(cuid())
+  promoterId        String
+  sourceUrl         String
+  checkoutUrl       String
+  name              String
+  startsAt          DateTime
+  venueName         String?
+  imageUrl          String?
+  djLineup          String[] @default([])
+  currentPriceCents Int?
+  soldOut           Boolean  @default(false)
+  isActive          Boolean  @default(true)
+  lastSeenAt        DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  promoter Promoter @relation(fields: [promoterId], references: [id], onDelete: Cascade)
+
+  @@unique([promoterId, sourceUrl])
+  @@index([promoterId, startsAt])
+  @@index([promoterId, isActive, startsAt])
+  @@map("promoter_fourvenues_events")
 }
 
 // ─────────────────────────────────────────────────────────── eventos

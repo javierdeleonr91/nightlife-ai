@@ -15,11 +15,13 @@ import { refreshIntervalSeconds } from "@nightlife/core/time";
 import { isAppError } from "@nightlife/core/errors";
 import { refreshEventFromSource } from "@nightlife/db/import";
 import { expireFinishedTrials } from "@nightlife/db/subscriptions";
+import { syncPromoterFourvenues } from "@nightlife/db";
 import {
   anonymizeExpiredConversations,
   closeEndedEvents,
   disconnect,
   listSyncCandidates,
+  listPromotersWithFourvenues,
   markSourceFailed,
 } from "@nightlife/db/platform";
 
@@ -69,10 +71,43 @@ async function refreshDue(): Promise<void> {
   if (ended > 0) console.log(`${ended} evento(s) marcados como terminados.`);
 }
 
+let lastPromoterSyncAt = 0;
+const PROMOTER_SYNC_INTERVAL_MS = 60 * 60 * 1000;
+
+async function refreshPromoterFourvenues(): Promise<void> {
+  const now = Date.now();
+  if (now - lastPromoterSyncAt < PROMOTER_SYNC_INTERVAL_MS) return;
+  lastPromoterSyncAt = now;
+
+  const promoters = await listPromotersWithFourvenues();
+  if (promoters.length === 0) return;
+
+  const provider = new FourvenuesPublicSource({
+    ...(process.env.SOURCE_CONTACT_URL ? { contactUrl: process.env.SOURCE_CONTACT_URL } : {}),
+    minRequestIntervalMs: Number(process.env.SOURCE_MIN_INTERVAL_MS ?? 3000),
+  });
+
+  for (const promoter of promoters) {
+    if (!promoter.fourvenuesUrl) continue;
+    try {
+      const events = await provider.getEvents({ profileUrl: promoter.fourvenuesUrl });
+      const report = await syncPromoterFourvenues({
+        promoterId: promoter.id,
+        events,
+      });
+      console.log(`  ✓ RRPP ${promoter.displayName}: ${report.saved} evento(s)`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "error desconocido";
+      console.warn(`  ✗ RRPP ${promoter.displayName}: ${message}`);
+    }
+  }
+}
+
 async function main() {
   const loop = process.argv.includes("--loop");
   do {
     await refreshDue().catch((e) => console.error("refresh:", e));
+    await refreshPromoterFourvenues().catch((e) => console.error("promoter-fourvenues:", e));
     await anonymizeExpiredConversations()
       .then((n) => {
         if (n > 0) console.log(`Retención: ${n} conversación(es) anonimizadas.`);

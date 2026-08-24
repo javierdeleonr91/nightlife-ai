@@ -29,7 +29,12 @@ import type {
   TicketingProvider,
 } from "./types";
 
-const ALLOWED_HOSTS = ["fourvenues.com", "www.fourvenues.com"];
+const ALLOWED_HOSTS = ["fourvenues.com"];
+
+function isAllowedHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return ALLOWED_HOSTS.some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
+}
 
 /** Segmentos que indican zona privada. Si aparecen, ni se intenta. */
 const FORBIDDEN_SEGMENTS = [
@@ -235,7 +240,7 @@ export function assertPublicUrl(input: string): string {
   if (url.protocol !== "https:") {
     throw AppError.validation("La URL debe empezar por https://");
   }
-  if (!ALLOWED_HOSTS.includes(url.hostname.toLowerCase())) {
+  if (!isAllowedHost(url.hostname)) {
     throw AppError.validation(`Solo se admiten URLs de ${ALLOWED_HOSTS[0]}`);
   }
   const segments = url.pathname.toLowerCase().split("/").filter(Boolean);
@@ -257,6 +262,13 @@ export function assertPublicEventUrl(input: string): string {
     );
   }
   return url;
+}
+
+export function canonicalPublicEventUrl(input: string): string {
+  const url = new URL(assertPublicEventUrl(input));
+  url.search = "";
+  url.hash = "";
+  return url.toString();
 }
 
 export function parseRobotsDisallow(robotsTxt: string, userAgent = "*"): string[] {
@@ -284,7 +296,7 @@ export function extractEventLinks(html: string, baseUrl: string): string[] {
     if (!href) continue;
     try {
       const resolved = new URL(href, baseUrl);
-      if (!ALLOWED_HOSTS.includes(resolved.hostname.toLowerCase())) continue;
+      if (!isAllowedHost(resolved.hostname)) continue;
       if (!/\/(events?|e|entradas)\//i.test(resolved.pathname)) continue;
       resolved.hash = "";
       found.add(resolved.toString());

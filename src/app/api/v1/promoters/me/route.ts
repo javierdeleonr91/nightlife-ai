@@ -3,8 +3,10 @@ import { NextResponse } from "next/server";
 import { AppError } from "@nightlife/core/errors";
 import { validateSlug } from "@nightlife/core/slug";
 import { normalizePromoterLink } from "@nightlife/core/checkout";
-import { unsafePrismaForMigrationsOnly as prisma } from "@nightlife/db";
-import { apiError, parseBody } from "@/lib/api";
+import { env } from "@nightlife/config/env";
+import { FourvenuesPublicSource } from "@nightlife/ticketing";
+import { syncPromoterFourvenues, disablePromoterFourvenuesEvents, unsafePrismaForMigrationsOnly as prisma } from "@nightlife/db";
+import { apiError, parseBody, rateLimit } from "@/lib/api";
 import { requirePrincipalApi } from "@/lib/require-api";
 
 const schema = z.object({
@@ -72,7 +74,36 @@ export async function PATCH(request: Request) {
       where: { id: principal.promoterId },
       data,
     });
-    return NextResponse.json({ id: promoter.id, slug: promoter.slug });
+    let fourvenuesSync = null;
+    let fourvenuesSyncPending = false;
+
+    if (body.fourvenuesUrl !== undefined) {
+      if (!promoter.fourvenuesUrl) {
+        await disablePromoterFourvenuesEvents(principal.promoterId);
+      } else {
+        try {
+          rateLimit(`promoter-fourvenues:${principal.promoterId}`, 10, 3600);
+          const source = new FourvenuesPublicSource({
+            contactUrl: env().SOURCE_CONTACT_URL,
+            minRequestIntervalMs: env().SOURCE_MIN_INTERVAL_MS,
+          });
+          const discovered = await source.getEvents({ profileUrl: promoter.fourvenuesUrl });
+          fourvenuesSync = await syncPromoterFourvenues({
+            promoterId: principal.promoterId,
+            events: discovered,
+          });
+        } catch {
+          fourvenuesSyncPending = true;
+        }
+      }
+    }
+
+    return NextResponse.json({
+      id: promoter.id,
+      slug: promoter.slug,
+      fourvenuesSync,
+      fourvenuesSyncPending,
+    });
   } catch (error) {
     return apiError(error);
   }

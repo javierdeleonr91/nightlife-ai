@@ -78,10 +78,12 @@ const loadPromoter = cache(async (slug: string) => {
   const promoter = await prisma.promoter.findUnique({ where: { slug } });
   if (!promoter) return null;
 
-  const vacio = { ...promoter, clubs: [] as PromoterClubView[], events: [] as PromoterEventView[] };
+  const vacio = { ...promoter, clubs: [] as PromoterClubView[], events: [] as PromoterEventView[], fourvenuesEvents: [] as PromoterFourvenuesEventView[] };
+
+  const desde = new Date(Date.now() - GRACIA_MS);
 
   // ── 2. Contexto del RRPP ─────────────────────────────────────────
-  const [altas, elegidos] = await withOwnerRls(
+  const [altas, elegidos, fourvenuesEvents] = await withOwnerRls(
     { type: "PROMOTER", promoterId: promoter.id },
     (tx) =>
       Promise.all([
@@ -94,19 +96,23 @@ const loadPromoter = cache(async (slug: string) => {
           where: { promoterId: promoter.id },
           select: { eventId: true, clubId: true, checkoutUrl: true },
         }),
+        tx.promoterFourvenuesEvent.findMany({
+          where: { promoterId: promoter.id, isActive: true, startsAt: { gte: desde } },
+          orderBy: { startsAt: "asc" },
+          take: 12,
+          select: { id: true, name: true, startsAt: true, venueName: true, imageUrl: true, djLineup: true, currentPriceCents: true, soldOut: true, checkoutUrl: true },
+        }),
       ]),
   );
 
   const clubIds = altas.map((a) => a.clubId);
-  if (clubIds.length === 0) return vacio;
+  if (clubIds.length === 0) return { ...vacio, fourvenuesEvents };
 
   // ── 1 bis. Los clubs, otra vez global ────────────────────────────
   const clubRows = await prisma.club.findMany({ where: { id: { in: clubIds } } });
   const clubById = new Map(clubRows.map((c) => [c.id, c]));
 
   // ── 3. Un contexto de club por club ──────────────────────────────
-  const desde = new Date(Date.now() - GRACIA_MS);
-
   const porClub = await Promise.all(
     clubIds.map((clubId) =>
       cargarCatalogo(
@@ -140,7 +146,7 @@ const loadPromoter = cache(async (slug: string) => {
     .sort((a, b) => a.event.startsAt.getTime() - b.event.startsAt.getTime())
     .slice(0, 12);
 
-  return { ...promoter, clubs, events };
+  return { ...promoter, clubs, events, fourvenuesEvents };
 });
 
 /**
@@ -197,6 +203,18 @@ interface PromoterEventView {
   readonly event: Catalogo["events"][number] & { readonly club: ClubRow };
 }
 
+interface PromoterFourvenuesEventView {
+  readonly id: string;
+  readonly name: string;
+  readonly startsAt: Date;
+  readonly venueName: string | null;
+  readonly imageUrl: string | null;
+  readonly djLineup: string[];
+  readonly currentPriceCents: number | null;
+  readonly soldOut: boolean;
+  readonly checkoutUrl: string;
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { promoterSlug } = await params;
   const promoter = await loadPromoter(promoterSlug);
@@ -225,7 +243,7 @@ export default async function PromoterPage({ params }: Props) {
   // contexto de RLS que toca. Antes estaba aquí en memoria sobre el
   // resultado de un `include` que traía TODOS los eventos del RRPP; ahora se
   // traen solo los que se pintan.
-  const events: EventCardData[] = promoter.events
+  const officialEvents: EventCardData[] = promoter.events
     .map((pe) => {
       const event = pe.event;
       const available = event.ticketTypes
@@ -254,6 +272,21 @@ export default async function PromoterPage({ params }: Props) {
         checkoutUrl,
       };
     });
+
+  const automaticEvents: EventCardData[] = promoter.fourvenuesEvents.map((event) => ({
+    id: `fourvenues-${event.id}`,
+    name: event.venueName ? `${event.name} · ${event.venueName}` : event.name,
+    startsAt: event.startsAt,
+    imageUrl: event.imageUrl,
+    djs: event.djLineup,
+    currentPriceCents: event.currentPriceCents,
+    soldOut: event.soldOut,
+    checkoutUrl: event.checkoutUrl,
+  }));
+
+  const events: EventCardData[] = [...officialEvents, ...automaticEvents]
+    .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())
+    .slice(0, 12);
 
   const primaryClub = promoter.clubs[0]?.club ?? null;
   const accent = primaryClub?.brand?.primaryColor ?? THEME_ACCENT;

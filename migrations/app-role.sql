@@ -155,6 +155,7 @@ BEGIN
     'messages',
     'promoter_clubs',
     'promoter_events',
+    'promoter_fourvenues_events',
     'promoter_faqs',
     'promoter_knowledge',
     'ticket_prices',

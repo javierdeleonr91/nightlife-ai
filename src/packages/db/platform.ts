@@ -111,3 +111,11 @@ export async function anonymizeExpiredConversations(batchSize = 500): Promise<nu
 export async function disconnect(): Promise<void> {
   await prisma.$disconnect();
 }
+
+export async function listPromotersWithFourvenues(limit = 100) {
+  return prisma.promoter.findMany({
+    where: { fourvenuesUrl: { not: null } },
+    select: { id: true, displayName: true, fourvenuesUrl: true },
+    take: limit,
+  });
+}
