@@ -4,6 +4,7 @@ import { AppError } from "@nightlife/core/errors";
 import { needsName } from "@nightlife/core/oauth";
 import { slugify, validateSlug, suggestSlugs } from "@nightlife/core/slug";
 import { startTrial, unsafePrismaForMigrationsOnly as prisma } from "@nightlife/db";
+import { setOwnerRlsContextInTx } from "@nightlife/db/owner";
 import { env } from "@nightlife/config/env";
 import { apiError, parseBody } from "@/lib/api";
 import { requirePrincipalApi } from "@/lib/require-api";
@@ -59,6 +60,10 @@ export async function POST(request: Request) {
           minAge: body.minAge ?? null,
         },
       });
+      // El id solo existe después de crear la raíz del Club. Desde aquí,
+      // el resto del onboarding entra bajo el contexto RLS de ese Club.
+      await setOwnerRlsContextInTx(tx, { type: "CLUB", clubId: created.id });
+
       await tx.clubMember.create({
         data: { userId: principal.userId, clubId: created.id, role: "CLUB_OWNER" },
       });

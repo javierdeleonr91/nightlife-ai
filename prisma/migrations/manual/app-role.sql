@@ -129,29 +129,84 @@ END $$;
 
 GRANT USAGE ON SCHEMA public TO nl_app;
 
+-- Idempotencia: si este archivo se vuelve a ejecutar después de una migración,
+-- primero elimina permisos antiguos y reconstruye únicamente la matriz vigente.
+REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM nl_app;
+
 DO $$
 DECLARE
   t text;
-  -- Las seis polimórficas más las de club que la aplicación consulta.
-  -- Cada una está aquí porque hay código que la usa; si dejas de usarla,
-  -- quítala.
-  rw text[] := ARRAY[
-    -- Polimórficas (dueño club o promoter)
-    'channels', 'customers', 'conversations', 'messages',
-    'follow_ups', 'ai_request_logs',
-    -- De club
-    'events', 'event_sources', 'ticket_types', 'ticket_prices', 'data_points',
-    'vip_options', 'faqs', 'knowledge_items', 'sales', 'promoter_events',
-    'promoter_clubs', 'club_members', 'brand_settings', 'ai_configs',
-    'clubs', 'promoters', 'users', 'audit_logs'
-  ];
 BEGIN
-  FOREACH t IN ARRAY rw LOOP
-    IF EXISTS (SELECT 1 FROM information_schema.tables
-                WHERE table_schema='public' AND table_name=t) THEN
-      EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON public.%I TO nl_app', t);
+  FOREACH t IN ARRAY ARRAY[
+    'ai_configs',
+    'ai_request_logs',
+    'beta_feedback',
+    'brand_settings',
+    'channels',
+    'club_integrations',
+    'conversations',
+    'customers',
+    'data_points',
+    'event_sources',
+    'events',
+    'faqs',
+    'follow_ups',
+    'knowledge_items',
+    'messages',
+    'promoter_clubs',
+    'promoter_events',
+    'promoter_faqs',
+    'promoter_knowledge',
+    'ticket_prices',
+    'ticket_types',
+    'unanswered_questions',
+    'vip_options'
+  ]
+  LOOP
+    IF to_regclass(format('public.%I', t)) IS NOT NULL THEN
+      EXECUTE format(
+        'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.%I TO nl_app',
+        t
+      );
     END IF;
   END LOOP;
+END $$;
+
+DO $$
+DECLARE
+  t text;
+BEGIN
+  FOREACH t IN ARRAY ARRAY[
+    'clubs',
+    'promoters',
+    'users',
+    'user_identities',
+    'club_invites',
+    'subscriptions'
+  ]
+  LOOP
+    IF to_regclass(format('public.%I', t)) IS NOT NULL THEN
+      EXECUTE format(
+        'GRANT SELECT, INSERT, UPDATE ON TABLE public.%I TO nl_app',
+        t
+      );
+    END IF;
+  END LOOP;
+END $$;
+
+DO $$
+BEGIN
+  IF to_regclass('public.club_members') IS NOT NULL THEN
+    GRANT SELECT, INSERT ON TABLE public.club_members TO nl_app;
+  END IF;
+
+  IF to_regclass('public.plans') IS NOT NULL THEN
+    GRANT SELECT ON TABLE public.plans TO nl_app;
+  END IF;
+
+  IF to_regclass('public.audit_logs') IS NOT NULL THEN
+    GRANT SELECT, INSERT ON TABLE public.audit_logs TO nl_app;
+  END IF;
 END $$;
 
 -- Secuencias: solo las de las tablas de arriba que las tengan. El esquema

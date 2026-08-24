@@ -173,6 +173,25 @@ export function withPublicClubRls<T>(clubId: string, work: (tx: DbClient) => Pro
   return withOwnerRls({ type: "CLUB", clubId }, work);
 }
 
+
+/**
+ * Fija el owner dentro de una transacción que YA existe.
+ *
+ * Solo se usa para bootstrap: por ejemplo, al crear un Club todavía no
+ * conocemos su id antes de empezar la transacción, así que no podemos entrar
+ * mediante withOwnerRls desde el principio.
+ */
+export async function setOwnerRlsContextInTx(
+  tx: OwnerTx,
+  owner: Owner,
+): Promise<void> {
+  const clubId = owner.type === "CLUB" ? owner.clubId : "";
+  const promoterId = owner.type === "PROMOTER" ? owner.promoterId : "";
+
+  await tx.$queryRaw`SELECT set_config(${"app.current_club_id"}, ${clubId}, true)`;
+  await tx.$queryRaw`SELECT set_config(${"app.current_promoter_id"}, ${promoterId}, true)`;
+}
+
 /**
  * Repositorio con el dueño incrustado.
  *
