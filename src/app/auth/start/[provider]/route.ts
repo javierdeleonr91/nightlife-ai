@@ -39,7 +39,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ prov
     httpOnly: true,
     sameSite: "lax",
     path: "/",
-    secure: process.env.NODE_ENV === "production",
+    secure: new URL(request.url).protocol === "https:",
     // Diez minutos: lo que tarda alguien en decidirse en la pantalla de Google.
     maxAge: 600,
   });
