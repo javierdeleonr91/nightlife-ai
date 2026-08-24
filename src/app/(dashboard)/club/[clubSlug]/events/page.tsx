@@ -1,9 +1,19 @@
 import { notFound } from "next/navigation";
-import { formatMoney, money } from "@nightlife/core/money";
-import { formatEventWhen } from "@nightlife/core/time";
 import { assertPermission, unsafePrismaForMigrationsOnly as prisma } from "@nightlife/db";
+import { withOwnerRls } from "@nightlife/db/owner";
 import { requirePrincipal } from "@/lib/session";
-import { ImportWizard } from "@/components/import-wizard";
+import { Page, PageHeader } from "@/components/app-shell";
+import { EventCardAdmin, type EventCardData } from "@/components/event-card";
+import { EmptyState, Icon } from "@/components/ui";
+import { ImportExperience } from "@/components/import-experience";
+
+/**
+ * Los eventos son contenido visual, no filas.
+ *
+ * Un club reconoce su fiesta por el flyer antes que por el nombre. Una rejilla
+ * de carteles se lee de un vistazo; una tabla obliga a leer. Y el estado va
+ * encima del cartel, no en una columna.
+ */
 
 export const dynamic = "force-dynamic";
 
@@ -15,68 +25,73 @@ export default async function EventsPage({ params }: { params: Promise<{ clubSlu
   if (!club) notFound();
   assertPermission(principal, club.id, "event:read");
 
-  const events = await prisma.event.findMany({
-    where: { clubId: club.id },
+  const events = await withOwnerRls({ type: "CLUB", clubId: club.id }, (tx) =>
+    tx.event.findMany({
+    where: { clubId: club.id, status: { not: "ENDED" } },
     orderBy: { startsAt: "asc" },
-    take: 50,
+    take: 40,
     include: {
       source: true,
       ticketTypes: { include: { prices: { where: { isCurrent: true } } } },
     },
+    }),
+  );
+
+  const cards: (EventCardData & { syncLabel?: string })[] = events.map((event) => {
+    const available = event.ticketTypes
+      .filter((t) => t.status === "AVAILABLE")
+      .flatMap((t) => t.prices.map((p) => p.amountCents))
+      .sort((a, b) => a - b);
+    const manual = event.ticketTypes.some((t) => t.prices.some((p) => p.source === "MANUAL"));
+
+    return {
+      id: event.id,
+      name: event.name,
+      startsAt: event.startsAt,
+      imageUrl: event.imageUrl,
+      djs: event.djLineup,
+      currentPriceCents: available[0] ?? null,
+      soldOut:
+        event.status === "SOLD_OUT" ||
+        (event.ticketTypes.length > 0 && event.ticketTypes.every((t) => t.status === "SOLD_OUT")),
+      checkoutUrl: event.ticketUrl,
+      syncLabel: manual
+        ? "precio manual"
+        : event.source?.lastSyncedAt
+          ? `sinc. ${event.source.lastSyncedAt.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}`
+          : "sin sincronizar",
+    };
   });
 
   return (
-    <main className="mx-auto w-full max-w-4xl space-y-10 px-5 py-10">
-      <header>
-        <h1 className="text-2xl font-bold">Eventos</h1>
-        <p className="text-sm text-dash-muted">
-          Importa desde Fourvenues o introduce los datos a mano. Nada se publica sin que lo confirmes.
-        </p>
-      </header>
+    <Page wide>
+      <PageHeader
+        eyebrow={club.name}
+        title="Eventos"
+        back={{ href: `/club/${club.slug}/overview`, label: "Inicio" }}
+        crumbs={[{ label: "Inicio", href: `/club/${club.slug}/overview` }, { label: "Eventos" }]}
+      />
 
-      <ImportWizard clubId={club.id} clubSlug={club.slug} />
-
-      <section className="space-y-3">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-dash-muted">
-          Publicados
-        </h2>
-        {events.length === 0 ? (
-          <p className="text-sm text-dash-muted">Todavía no hay eventos.</p>
-        ) : (
-          <ul className="divide-y divide-dash-line overflow-hidden rounded-xl border border-dash-line bg-dash-surface">
-            {events.map((event) => {
-              const available = event.ticketTypes
-                .filter((t) => t.status === "AVAILABLE")
-                .flatMap((t) => t.prices.map((p) => p.amountCents))
-                .sort((a, b) => a - b);
-              const manual = event.ticketTypes.some((t) => t.prices.some((p) => p.source === "MANUAL"));
-
-              return (
-                <li key={event.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-                  <div>
-                    <p className="font-semibold">{event.name}</p>
-                    <p className="text-xs text-dash-muted">
-                      {formatEventWhen(event.startsAt, club.timezone)}
-                      {event.source?.lastSyncedAt
-                        ? ` · sincronizado ${event.source.lastSyncedAt.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}`
-                        : " · sin sincronizar"}
-                      {manual ? " · precio manual" : ""}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3 text-sm">
-                    <span className="font-bold tabular-nums">
-                      {available[0] !== undefined ? formatMoney(money(available[0])) : "—"}
-                    </span>
-                    <span className="rounded-full border border-dash-line px-2 py-0.5 text-[11px] uppercase tracking-wide text-dash-muted">
-                      {event.status.toLowerCase()}
-                    </span>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-    </main>
+      {cards.length === 0 ? (
+        <EmptyState
+          glyph={<Icon name="ticket" size={26} />}
+          title="Aún no hay eventos"
+          body="Tus eventos están en Fourvenues. Conecta tu cuenta y aparecerán aquí; no tendrás que introducir una misma noche dos veces."
+          action={<ImportExperience clubId={club.id} clubSlug={club.slug} />}
+        />
+      ) : (
+        <div className="nl-stagger grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {cards.map((card) => (
+            <EventCardAdmin
+              key={card.id}
+              event={card}
+              timezone={club.timezone}
+              href={`/club/${club.slug}/events/${card.id}`}
+              {...(card.syncLabel ? { syncLabel: card.syncLabel } : {})}
+            />
+          ))}
+        </div>
+      )}
+    </Page>
   );
 }

@@ -24,6 +24,7 @@ export type Permission =
   | "club:read"
   | "club:update"
   | "club:branding"
+  | "club:integrations"
   | "club:delete"
   | "event:read"
   | "event:write"
@@ -39,7 +40,7 @@ export type Permission =
   | "platform:admin";
 
 const OWNER_PERMISSIONS: readonly Permission[] = [
-  "club:read", "club:update", "club:branding", "club:delete",
+  "club:read", "club:update", "club:branding", "club:integrations", "club:delete",
   "event:read", "event:write", "source:import", "source:refresh",
   "vip:write", "faq:write", "channel:write", "promoter:approve",
   "conversation:read:all", "conversation:read:own", "conversation:handoff",

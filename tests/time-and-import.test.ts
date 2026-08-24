@@ -150,12 +150,14 @@ describe("ManualSource: el plan B siempre funciona", () => {
     expect(source.capabilities.supportsAvailability).toBe(false);
   });
 
-  it("añade la etiqueta de origen al enlace de checkout", () => {
+  it("devuelve el enlace de compra tal cual, sin añadirle nada", () => {
+    // Antes le pegábamos ?promoter=slug. La spec lo prohíbe (§50) y con razón:
+    // inventa un contrato con una ticketera que no controlamos.
     const source = new ManualSource({
       name: "x",
       startsAtIso: "2026-10-03T23:59:00+02:00",
       ticketUrl: "https://fourvenues.com/c/events/x",
     });
-    expect(source.getCheckoutUrl({}, { referralTag: "alex" })).toMatch(/promoter=alex/);
+    expect(source.getCheckoutUrl({})).toBe("https://fourvenues.com/c/events/x");
   });
 });

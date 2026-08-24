@@ -109,6 +109,46 @@ export const DEFAULT_PLAN_BY_AUDIENCE: Record<PlanAudience, string> = {
 
 export const TRIAL_DAYS = 14;
 
+/**
+ * BETA CERRADA — el interruptor, y solo uno.
+ *
+ * Durante la beta cerrada no hay Stripe, no hay cobro y no hay plan que
+ * comprar: todo el mundo entra invitado y con el producto entero. Un club o
+ * un RRPP de la beta no tiene fila en `subscriptions`, así que
+ * `getSubscriptionState` devuelve `null`, `isEntitled(null)` es `false` y
+ * `hasFeature(null, "ai_assistant")` también — lo cual es correcto para el
+ * modelo comercial y **equivocado** para la beta: el asistente es
+ * exactamente lo que se está probando.
+ *
+ * Lo que NO se hace aquí, a propósito:
+ *
+ *  · No se toca `hasFeature`. Sigue significando lo que significa: «este
+ *    plan incluye esta feature». Que devuelva `false` sin suscripción es su
+ *    respuesta correcta, no un bug que tapar.
+ *  · No se borra nada. `PLANS`, `getSubscriptionState`, `isEntitled`,
+ *    `limitsFor` y la tabla `subscriptions` siguen enteros. Cuando la beta
+ *    termine, esta constante pasa a `false` y el cobro entra sin reescribir
+ *    ninguna comprobación.
+ *  · No se inventa un plan `BETA` en `PLANS`. Un plan es algo que se puede
+ *    contratar; esto es un periodo, y un periodo es una bandera.
+ *
+ * Está tipado como `boolean` y no como `true` a posta: con el tipo literal,
+ * TypeScript marcaría como inalcanzable el código de cobro que tiene que
+ * seguir vivo y compilando.
+ */
+export const BETA_CERRADA: boolean = true;
+
+/**
+ * ¿Puede responder el asistente en nombre de este dueño?
+ *
+ * Es la única pregunta que deben hacerse los flujos públicos. Durante la
+ * beta la respuesta es sí para todos; después vuelve a ser la del plan.
+ */
+export function assistantAvailable(state: SubscriptionState | null): boolean {
+  if (BETA_CERRADA) return true;
+  return hasFeature(state, "ai_assistant");
+}
+
 export function planByCode(code: string): PlanDefinition | null {
   return PLANS.find((p) => p.code === code) ?? null;
 }

@@ -3,7 +3,7 @@ import { slugify } from "@nightlife/core/slug";
 import { refreshIntervalSeconds } from "@nightlife/core/time";
 import { MIN_CONFIDENCE_TO_STORE } from "@nightlife/core/provenance";
 import type { NormalizedEvent } from "@nightlife/ticketing/types";
-import { prisma } from "./client";
+import { withOwnerRls } from "./owner";
 
 /**
  * Persistencia del import y del refresh.
@@ -42,7 +42,9 @@ export async function persistImportedEvent(
   const name = normalized.name.value;
   const baseSlug = slugify(name) || "evento";
 
-  return prisma.$transaction(async (tx) => {
+  // Con el club fijado: todo lo que se escribe aquí —evento, tarifas,
+  // precios, data points— está bajo RLS.
+  return withOwnerRls({ type: "CLUB", clubId: options.clubId }, async (tx) => {
     // Slug único dentro del club, no global: dos clubs pueden tener su
     // "summer-closing" sin pisarse.
     let slug = baseSlug;
@@ -120,11 +122,21 @@ export async function persistImportedEvent(
  * Refresh de un evento ya importado. Solo toca lo que cambió, y respeta lo
  * que el club haya fijado a mano.
  */
+/**
+ * `clubId` es obligatorio desde app-04, y no es burocracia: es lo que fija el
+ * contexto de RLS de la transacción. Sin él, con `nl_app` el `findUnique` de
+ * abajo devolvería null y la función diría «el evento no existe» sobre un
+ * evento que existe.
+ *
+ * El llamante ya lo tiene siempre: la ruta lo valida contra el club del
+ * usuario y el worker lo saca del propio `event_source`.
+ */
 export async function refreshEventFromSource(
   eventId: string,
   normalized: NormalizedEvent,
+  clubId: string,
 ): Promise<{ pricesChanged: number }> {
-  return prisma.$transaction(async (tx) => {
+  return withOwnerRls({ type: "CLUB", clubId }, async (tx) => {
     const event = await tx.event.findUnique({
       where: { id: eventId },
       include: { ticketTypes: { include: { prices: { where: { isCurrent: true } } } } },

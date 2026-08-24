@@ -14,7 +14,12 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // DATABASE_URL pasa por el pooler; DIRECT_URL va a la base sin pooler.
+  // Prisma necesita la conexión directa para migraciones e introspección:
+  // con pgBouncer en medio, `migrate` falla de formas poco obvias.
+  // NO eliminar directUrl.
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ─────────────────────────────────────────────────────────── enums
@@ -22,6 +27,12 @@ datasource db {
 enum GlobalRole {
   USER
   SUPER_ADMIN
+}
+
+/// Qué eligió la persona la primera vez que entró. Se pregunta una sola vez.
+enum AccountType {
+  CLUB
+  PROMOTER
 }
 
 enum ClubRole {
@@ -56,6 +67,22 @@ enum SyncStatus {
   STALE
   FAILED
   UNSUPPORTED
+}
+
+enum IntegrationProvider {
+  FOURVENUES
+}
+
+enum IntegrationEnvironment {
+  ALPHA
+  PRODUCTION
+}
+
+enum IntegrationStatus {
+  NOT_CONNECTED
+  CONNECTED
+  INVALID_KEY
+  ERROR
 }
 
 enum TicketTypeStatus {
@@ -96,6 +123,17 @@ enum ChannelType {
   INSTAGRAM
 }
 
+/// De quién es un canal y todo lo que cuelga de él.
+///
+/// No es un campo descriptivo: `ownerType` + `ownerClubId`/`ownerPromoterId`
+/// son las columnas que leen las políticas de RLS. Cambiarlos cambia quién
+/// ve qué, y por eso la base de datos los hace inmutables (16 triggers,
+/// ver prisma/migrations/manual/001-channel-owner.sql).
+enum ChannelOwnerType {
+  CLUB
+  PROMOTER
+}
+
 enum ChannelStatus {
   DISCONNECTED
   CONNECTED
@@ -125,9 +163,14 @@ enum SubscriptionStatus {
 model User {
   id           String     @id @default(cuid())
   email        String     @unique
-  passwordHash String
+  /// Opcional a propósito: quien entra con Google o Apple no tiene contraseña.
+  /// `null` significa «esta cuenta solo entra por proveedor», y el login por
+  /// email la rechaza en vez de compararla contra una cadena vacía.
+  passwordHash String?
   name         String
   globalRole   GlobalRole @default(USER)
+  // Se guarda en el primer registro para no volver a preguntarlo nunca.
+  accountType  AccountType?
   locale       String     @default("es")
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
@@ -135,8 +178,39 @@ model User {
   clubMemberships ClubMember[]
   promoter        Promoter?
   auditLogs       AuditLog[]
+  identities      UserIdentity[]
 
   @@map("users")
+}
+
+/// Cómo entra una persona: contraseña, Google o Apple.
+///
+/// Una fila por proveedor y usuario. La clave real es (provider, subject): el
+/// `sub` que da el proveedor es lo único estable — el email de una cuenta de
+/// Google puede cambiar, y Apple entrega un relay que tampoco es fiable como
+/// identificador.
+///
+/// Aquí NO se guardan tokens de acceso. Usamos OAuth para saber quién eres, no
+/// para leer tu Gmail ni tu iCloud: el token cumple su función en el callback y
+/// se descarta. Guardar lo que no se necesita solo crea algo que robar.
+model UserIdentity {
+  id         String   @id @default(cuid())
+  userId     String
+  /// "google" | "apple" | "password"
+  provider   String
+  /// El `sub` del proveedor. Para "password" es el propio id del usuario.
+  subject    String
+  /// Email tal y como lo dio el proveedor la primera vez. Apple solo lo manda
+  /// en la primera autorización, así que si no se guarda aquí se pierde.
+  email      String?
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, subject])
+  @@index([userId])
+  @@map("user_identities")
 }
 
 model Club {
@@ -157,13 +231,17 @@ model Club {
   policies     String?
   status       ClubStatus @default(ACTIVE)
   botEnabled   Boolean    @default(false)
+  /// Igual que en Promoter: solo para reanudar el onboarding.
+  onboardingStep Int      @default(0)
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
   members       ClubMember[]
   events        Event[]
   promoters     PromoterClub[]
+  invites       ClubInvite[]
   brand         BrandSettings?
+  integrations  ClubIntegration[]
   faqs          FAQ[]
   knowledge     KnowledgeItem[]
   vipOptions    VIPOption[]
@@ -171,6 +249,17 @@ model Club {
   customers     Customer[]
   conversations Conversation[]
   aiConfig      AiConfig?
+
+  /// Relaciones de propiedad polimórfica. Van con nombre porque hay más de
+  /// una FK desde la misma tabla hacia Club (dueño, contexto y la legacy).
+  ownedCustomers     Customer[]           @relation("CustomerOwnerClub")
+  ownedConversations Conversation[]       @relation("ConversationOwnerClub")
+  contextConversations Conversation[]     @relation("ConversationContextClub")
+  ownedMessages      Message[]            @relation("MessageOwnerClub")
+  ownedFollowUps     FollowUp[]           @relation("FollowUpOwnerClub")
+  ownedAiLogs        AiRequestLog[]       @relation("AiLogOwnerClub")
+  ownedUnanswered    UnansweredQuestion[] @relation("UnansweredOwnerClub")
+  ownedFeedback      BetaFeedback[]       @relation("FeedbackOwnerClub")
 
   @@index([status])
   @@map("clubs")
@@ -201,6 +290,26 @@ model Promoter {
   city        String?
   instagram   String?
   whatsapp    String?
+  /// Link personal de Fourvenues del RRPP, tal y como se lo dio Fourvenues.
+  /// Lo pega él. Nosotros no lo componemos, no le añadimos parámetros y no
+  /// deducimos nada de él. Ver normalizePromoterLink en core/checkout.ts.
+  fourvenuesUrl String?
+
+  /// Portada del perfil público. Sin ella la página se ve vacía; con ella
+  /// parece nightlife. Vive en el bucket profile-media, igual que photoUrl.
+  coverImageUrl String?
+
+  /// Qué enseña su perfil público. El WhatsApp es su teléfono personal, así
+  /// que arranca en false: publicar el móvil de alguien sin que lo pida es un
+  /// error que no se deshace.
+  showInstagram Boolean @default(true)
+  showWhatsapp  Boolean @default(false)
+  showCity      Boolean @default(true)
+
+  /// Solo sirve para reanudar el onboarding donde lo dejó. NO es la fuente de
+  /// verdad de si algo está configurado: eso se calcula de los datos reales
+  /// (ver core/completion.ts).
+  onboardingStep Int @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -208,8 +317,49 @@ model Promoter {
   clubs         PromoterClub[]
   events        PromoterEvent[]
   conversations Conversation[]
+  channels      Channel[]
+
+  ownedCustomers     Customer[]           @relation("CustomerOwnerPromoter")
+  ownedConversations Conversation[]       @relation("ConversationOwnerPromoter")
+  ownedMessages      Message[]            @relation("MessageOwnerPromoter")
+  ownedFollowUps     FollowUp[]           @relation("FollowUpOwnerPromoter")
+  ownedAiLogs        AiRequestLog[]       @relation("AiLogOwnerPromoter")
+  ownedUnanswered    UnansweredQuestion[] @relation("UnansweredOwnerPromoter")
+  ownedFeedback      BetaFeedback[]       @relation("FeedbackOwnerPromoter")
+  knowledge          PromoterKnowledge[]
+  faqs               PromoterFAQ[]
 
   @@map("promoters")
+}
+
+/// Invitación de un club a un RRPP.
+///
+/// El código ES el permiso. El promoter lo canjea y el servidor deduce de él a
+/// qué club entra: el navegador nunca manda un `clubId`, así que cambiar un id
+/// en una petición no sirve para colarse en otro club.
+///
+/// Revocable y con caducidad porque un código circula por WhatsApp y acaba
+/// donde no debe. `maxUses = 0` significa sin límite: sirve para el enlace que
+/// un club pone en su grupo de RRPPs.
+model ClubInvite {
+  id          String    @id @default(cuid())
+  clubId      String
+  /// 8 caracteres, alfabeto sin 0/O/1/I/L. Ver core/invite.ts.
+  code        String    @unique
+  /// Quién lo creó, para poder auditar quién metió a quién.
+  createdById String
+  expiresAt   DateTime?
+  /// 0 = usos ilimitados.
+  maxUses     Int       @default(1)
+  usedCount   Int       @default(0)
+  revokedAt   DateTime?
+  note        String?
+  createdAt   DateTime  @default(now())
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@index([clubId, revokedAt])
+  @@map("club_invites")
 }
 
 model PromoterClub {
@@ -220,6 +370,9 @@ model PromoterClub {
   canEditEvents Boolean          @default(false)
   requestedAt DateTime           @default(now())
   approvedAt  DateTime?
+  /// Con qué invitación entró, si entró por una. Sirve para auditar y para
+  /// poder deshacer una invitación que se compartió de más.
+  invitedVia  String?
 
   promoter Promoter @relation(fields: [promoterId], references: [id], onDelete: Cascade)
   club     Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
@@ -234,11 +387,13 @@ model PromoterEvent {
   promoterId String
   eventId    String
   clubId     String
-  // Etiqueta que se añade al enlace de checkout y que Fourvenues recibe tal
-  // cual. Nosotros la escribimos y no la leemos nunca de vuelta: sirve para
-  // que el club sepa en SU ticketera de dónde vino la venta. No es atribución
-  // nuestra, no alimenta ningún cálculo y no se muestra como métrica de ventas.
-  referralTag String?
+  // URL de checkout propia del promoter para ESTE evento, cuando Fourvenues se
+  // la haya dado a él. Es una URL real que él aporta o que descubrimos de su
+  // enlace: nunca la componemos nosotros añadiendo parámetros.
+  //
+  // Si está vacía, la compra usa el checkout oficial del club (ver §50 de la
+  // spec y resolveCheckoutUrl en packages/core/checkout.ts).
+  checkoutUrl String?
   // Telemetría interna de producto: cuántas veces se ha pulsado COMPRAR desde
   // este link. Sirve para depurar y para saber si el producto funciona. NO es
   // un contador de ventas ni se enseña al promoter como tal.
@@ -281,6 +436,48 @@ model Event {
   @@index([clubId, startsAt])
   @@index([clubId, status])
   @@map("events")
+}
+
+/// Credenciales de una integración de un club. Hoy solo Fourvenues.
+///
+/// La API key vive aquí CIFRADA (AES-256-GCM, ver packages/core/secret-box.ts)
+/// y no sale nunca hacia el navegador: la UI solo recibe `keyHint`, que son los
+/// cuatro últimos caracteres. Tampoco se escribe en logs ni en `lastError`:
+/// los errores se guardan ya traducidos a un código nuestro.
+///
+/// `clubId` va en cada consulta, como en el resto del esquema: las credenciales
+/// de un club no pueden alcanzarse desde el contexto de otro.
+model ClubIntegration {
+  id            String                 @id @default(cuid())
+  clubId        String
+  provider      IntegrationProvider    @default(FOURVENUES)
+  environment   IntegrationEnvironment @default(PRODUCTION)
+  status        IntegrationStatus      @default(NOT_CONNECTED)
+
+  /// Texto sellado por secret-box. Nunca en claro, nunca en una respuesta API.
+  encryptedKey  String
+  /// «••••cdef». Lo único del secreto que puede ver el cliente.
+  keyHint       String
+
+  /// Canal/equipo elegido dentro de la organización de Fourvenues.
+  channelId     String?
+  channelName   String?
+
+  lastVerifiedAt DateTime?
+  lastSyncedAt   DateTime?
+  /// Código de error nuestro (INVALID_KEY, RATE_LIMITED…), jamás el cuerpo de
+  /// la respuesta de Fourvenues.
+  lastErrorCode  String?
+  eventsSynced   Int      @default(0)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@unique([clubId, provider])
+  @@index([clubId])
+  @@map("club_integrations")
 }
 
 model EventSource {
@@ -457,33 +654,79 @@ model BrandSettings {
 // ─────────────────────────────────────────────────────────── conversación
 
 model Customer {
-  id                 String   @id @default(cuid())
-  clubId             String
-  channelType        ChannelType
-  // Identificador del cliente hasheado con sal por club (minimización GDPR).
-  externalHandleHash String
-  displayName        String?
-  locale             String   @default("es")
-  consentAt          DateTime?
-  consentSource      String?
-  createdAt          DateTime @default(now())
+  id String @id @default(cuid())
 
-  club          Club           @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  /// Dueño denormalizado desde el canal. No se manda desde el frontend: si
+  /// llega vacío lo deriva un trigger, y si llega distinto al del canal se
+  /// rechaza la fila.
+  ownerType       ChannelOwnerType
+  ownerClubId     String?
+  ownerPromoterId String?
+
+  /// El canal por el que escribe. INMUTABLE: moverlo cambiaría el dueño por
+  /// la puerta de atrás.
+  channelId String
+
+  /// Identidad externa con alcance de canal. El mismo Instagram escribiendo
+  /// a Javier y a MON son dos clientes distintos, y es lo correcto: sus
+  /// conversaciones no deben cruzarse.
+  /// Hash con pepper para buscar; la referencia real va cifrada.
+  externalUserHash String
+  externalUserRef  String?
+
+  displayName   String?
+  locale        String    @default("es")
+  consentAt     DateTime?
+  consentSource String?
+  createdAt     DateTime  @default(now())
+
+  /// ── LEGACY ────────────────────────────────────────────────────────
+  /// Se quedan hasta la migración 002, tras días de rodaje. No las use el
+  /// código nuevo: el inquilino es ownerClubId/ownerPromoterId.
+  clubId             String?
+  channelType        ChannelType?
+  externalHandleHash String?
+
+  channel       Channel        @relation(fields: [channelId], references: [id], onDelete: NoAction)
+  ownerClub     Club?          @relation("CustomerOwnerClub", fields: [ownerClubId], references: [id], onDelete: Cascade)
+  ownerPromoter Promoter?      @relation("CustomerOwnerPromoter", fields: [ownerPromoterId], references: [id], onDelete: Cascade)
+  club          Club?          @relation(fields: [clubId], references: [id], onDelete: Cascade)
   conversations Conversation[]
 
+  @@unique([channelId, externalUserHash], map: "customers_channel_hash_key")
   @@unique([clubId, channelType, externalHandleHash])
+  @@index([ownerClubId], map: "customers_owner_club_idx")
+  @@index([ownerPromoterId], map: "customers_owner_promoter_idx")
   @@index([clubId])
   @@map("customers")
 }
 
 model Conversation {
-  id             String             @id @default(cuid())
-  clubId         String
-  promoterId     String?
+  id String @id @default(cuid())
+
+  /// DE QUIÉN es la conversación. Derivado del canal, inmutable, y lo único
+  /// que mira RLS.
+  ownerType       ChannelOwnerType
+  ownerClubId     String?
+  ownerPromoterId String?
+
+  /// DE QUÉ CLUB se está hablando. No es lo mismo y no se puede confundir:
+  /// un cliente escribe al Instagram de Javier (owner = Javier) y pregunta
+  /// por MON (contexto = MON). MON NO puede leer ese DM.
+  ///
+  /// Sí es mutable —la conversación cambia de tema— y NO aparece en ninguna
+  /// política de RLS. Hay un test que lo comprueba.
+  contextClubId String?
+
+  /// El canal por el que llegó. INMUTABLE, igual que en Customer.
+  channelId String
+
   customerId     String
-  channelId      String?
   channelType    ChannelType        @default(WEBCHAT)
   status         ConversationStatus @default(AI_ACTIVE)
+  /// Idioma detectado del cliente. La IA responde en el idioma del mensaje,
+  /// no en el del panel.
+  locale         String?
   lastIntent     String?
   eventFocusId   String?
   partySize      Int?
@@ -491,16 +734,36 @@ model Conversation {
   ctaClicked     Boolean            @default(false)
   lastMessageAt  DateTime           @default(now())
   createdAt      DateTime           @default(now())
-  // Retención GDPR: un job diario anonimiza lo que pasa de esta fecha.
+  /// Retención GDPR: un job diario anonimiza lo que pasa de esta fecha.
   expiresAt      DateTime
 
-  club     Club      @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  promoter Promoter? @relation(fields: [promoterId], references: [id], onDelete: SetNull)
-  customer Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  channel  Channel?  @relation(fields: [channelId], references: [id], onDelete: SetNull)
-  messages Message[]
-  followUp FollowUp?
+  /// ── LEGACY ────────────────────────────────────────────────────────
+  /// `promoterId` marcaba por quién llegó el cliente, no de quién era la
+  /// conversación. No se convirtió en dueño y no debe usarse como tal.
+  clubId     String?
+  promoterId String?
 
+  channel       Channel   @relation(fields: [channelId], references: [id], onDelete: NoAction)
+  ownerClub     Club?     @relation("ConversationOwnerClub", fields: [ownerClubId], references: [id], onDelete: Cascade)
+  ownerPromoter Promoter? @relation("ConversationOwnerPromoter", fields: [ownerPromoterId], references: [id], onDelete: Cascade)
+  contextClub   Club?     @relation("ConversationContextClub", fields: [contextClubId], references: [id], onDelete: SetNull)
+  club          Club?     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  promoter      Promoter? @relation(fields: [promoterId], references: [id], onDelete: SetNull)
+  customer      Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  messages   Message[]
+  followUp   FollowUp?
+  aiLogs     AiRequestLog[]
+  unanswered UnansweredQuestion[]
+
+  /// La usa la FK compuesta messages(conversationId, ownerType) para que el
+  /// tipo de dueño de un mensaje no pueda divergir del de su conversación.
+  @@unique([id, ownerType], map: "conversations_id_owner_type_key")
+  @@index([ownerClubId, status], map: "conversations_owner_club_status_idx")
+  @@index([ownerClubId, lastMessageAt], map: "conversations_owner_club_last_idx")
+  @@index([ownerPromoterId, status], map: "conversations_owner_promoter_status_idx")
+  @@index([ownerPromoterId, lastMessageAt], map: "conversations_owner_promoter_last_idx")
+  @@index([contextClubId], map: "conversations_context_club_idx")
   @@index([clubId, status])
   @@index([clubId, lastMessageAt])
   @@index([promoterId])
@@ -509,58 +772,111 @@ model Conversation {
 }
 
 model Message {
-  id             String      @id @default(cuid())
+  id String @id @default(cuid())
+
+  /// Derivado de la conversación. Inmutable, igual que conversationId.
+  ownerType       ChannelOwnerType
+  ownerClubId     String?
+  ownerPromoterId String?
+
   conversationId String
-  clubId         String
   role           MessageRole
   content        String
   intent         String?
-  // Provenance interno: de dónde salió cada afirmación. No se muestra al cliente.
+  /// Provenance interno: de dónde salió cada afirmación. No se muestra al
+  /// cliente; sirve para depurar por qué la IA dijo lo que dijo.
   provenanceJson Json?
-  model          String?
-  tokensIn       Int?
-  tokensOut      Int?
-  latencyMs      Int?
+  model            String?
+  tokensIn         Int?
+  tokensOut        Int?
+  latencyMs        Int?
   validationPassed Boolean?
-  createdAt      DateTime    @default(now())
+  createdAt        DateTime @default(now())
 
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  /// ── LEGACY ────────────────────────────────────────────────────────
+  clubId String?
+
+  conversation  Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  ownerClub     Club?        @relation("MessageOwnerClub", fields: [ownerClubId], references: [id], onDelete: Cascade)
+  ownerPromoter Promoter?    @relation("MessageOwnerPromoter", fields: [ownerPromoterId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, createdAt])
+  @@index([ownerClubId], map: "messages_owner_club_idx")
+  @@index([ownerPromoterId], map: "messages_owner_promoter_idx")
   @@index([clubId])
   @@map("messages")
 }
 
 model Channel {
-  id                   String        @id @default(cuid())
-  clubId               String
+  id String @id @default(cuid())
+
+  /// Propiedad polimórfica. Exactamente uno de clubId/promoterId, según
+  /// ownerType — lo garantiza el CHECK `channels_one_owner` en PostgreSQL.
+  /// Los tres son INMUTABLES: para cambiar de manos se desconecta el canal y
+  /// se vuelve a conectar, que crea filas nuevas.
+  ownerType  ChannelOwnerType
+  /// LEGACY + dueño: era la única columna de propiedad y sigue siéndolo
+  /// cuando ownerType = CLUB. Nullable desde 001 porque un canal de RRPP no
+  /// tiene club.
+  clubId     String?
+  promoterId String?
+
   type                 ChannelType
   status               ChannelStatus @default(DISCONNECTED)
   externalAccountId    String?
-  // Cifrado en reposo (AES-GCM). Nunca sale al frontend.
+  /// Nombre de la cuenta tal y como lo devuelve Meta (@mon_madrid). Solo
+  /// para que el usuario reconozca qué ha conectado.
+  displayName          String?
+  /// Cifrado en reposo (AES-GCM). Nunca sale al frontend.
   credentialsEncrypted String?
+  tokenExpiresAt       DateTime?
   webhookSecret        String?
+  /// Si está en false el mensaje entra igual pero la IA no responde sola.
+  autoReply            Boolean       @default(true)
+  /// Cómo se conectó WhatsApp: coexistencia con la app de WhatsApp Business,
+  /// o número dedicado. Cambia el onboarding y lo que se le puede prometer.
+  waMode               String?
+  /// Último código de error de Meta. Sirve para enseñar «Reconectar» en vez
+  /// de un estado verde mentiroso.
+  lastErrorCode        String?
   createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
 
-  club          Club           @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  club          Club?          @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  promoter      Promoter?      @relation(fields: [promoterId], references: [id], onDelete: Cascade)
   conversations Conversation[]
+  customers     Customer[]
 
+  /// Una cuenta externa no puede estar conectada dos veces. NULL cuenta como
+  /// distinto en PostgreSQL, así que varios canales DESCONECTADOS conviven.
+  @@unique([type, externalAccountId], map: "channels_type_external_key")
+  @@unique([promoterId, type], map: "channels_promoter_type_key")
   @@unique([clubId, type])
+  @@index([ownerType, status], map: "channels_owner_status_idx")
   @@map("channels")
 }
 
 model FollowUp {
-  id               String         @id @default(cuid())
-  clubId           String
+  id String @id @default(cuid())
+
+  ownerType       ChannelOwnerType
+  ownerClubId     String?
+  ownerPromoterId String?
+
   conversationId   String         @unique
-  promoterId       String?
   suggestedMessage String
   status           FollowUpStatus @default(SUGGESTED)
   sentAt           DateTime?
   sentByUserId     String?
   createdAt        DateTime       @default(now())
 
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  /// ── LEGACY ────────────────────────────────────────────────────────
+  clubId     String?
+  promoterId String?
+
+  conversation  Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  ownerClub     Club?        @relation("FollowUpOwnerClub", fields: [ownerClubId], references: [id], onDelete: Cascade)
+  ownerPromoter Promoter?    @relation("FollowUpOwnerPromoter", fields: [ownerPromoterId], references: [id], onDelete: Cascade)
 
   @@index([clubId, status])
   @@map("follow_ups")
@@ -648,9 +964,15 @@ model AuditLog {
 
 // Observabilidad de IA. Sin texto del cliente: solo metadatos.
 model AiRequestLog {
-  id               String   @id @default(cuid())
-  clubId           String
-  promoterId       String?
+  id String @id @default(cuid())
+
+  /// Con conversación, el dueño se deriva de ella. Sin conversación (una
+  /// consulta suelta) tiene que venir del contexto de servidor: el trigger
+  /// rechaza la fila antes que inventárselo.
+  ownerType       ChannelOwnerType
+  ownerClubId     String?
+  ownerPromoterId String?
+
   conversationId   String?
   intent           String?
   resolvedBy       String // "ROUTER" | "FAQ" | "TEMPLATE" | "LLM"
@@ -664,6 +986,131 @@ model AiRequestLog {
   error            String?
   createdAt        DateTime @default(now())
 
+  /// ── LEGACY ────────────────────────────────────────────────────────
+  clubId     String?
+  promoterId String?
+
+  conversation  Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  ownerClub     Club?         @relation("AiLogOwnerClub", fields: [ownerClubId], references: [id], onDelete: Cascade)
+  ownerPromoter Promoter?     @relation("AiLogOwnerPromoter", fields: [ownerPromoterId], references: [id], onDelete: Cascade)
+
   @@index([clubId, createdAt])
   @@map("ai_request_logs")
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// Beta: aprendizaje del asistente y feedback
+//
+// Tablas NUEVAS. Las crea prisma/migrations/manual/010-beta-tables.sql.
+// No tocan nada existente y no borran ninguna columna legacy: la limpieza
+// de legacy sigue siendo una migración aparte y posterior.
+// ══════════════════════════════════════════════════════════════════════
+
+enum UnansweredStatus {
+  OPEN
+  ANSWERED
+  DISMISSED
+}
+
+/// Lo que la IA no supo responder.
+///
+/// Es el corazón del bucle de mejora de la beta y la razón de que el
+/// asistente pueda no saber algo sin quedar mal: en vez de inventarse una
+/// respuesta, la guarda aquí y el Club o el RRPP la contesta. A partir de
+/// ese momento la misma pregunta —dicha como sea— ya se responde sola.
+model UnansweredQuestion {
+  id String @id @default(cuid())
+
+  ownerType       ChannelOwnerType
+  ownerClubId     String?
+  ownerPromoterId String?
+
+  conversationId String?
+  channelType    ChannelType?
+  /// Tal y como la escribió el cliente. Sin limpiar: la forma real en que la
+  /// gente pregunta es justo lo que hay que aprender.
+  originalQuestion String
+  detectedIntent   String?
+  /// Por qué no se pudo responder: NO_DATA | STALE_DATA | AMBIGUOUS | NO_LLM
+  reason     String?
+  status     UnansweredStatus @default(OPEN)
+  /// Lo que contestó el humano. Al guardarlo se crea también la FAQ.
+  answer     String?
+  answeredBy String?
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+
+  conversation  Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  ownerClub     Club?         @relation("UnansweredOwnerClub", fields: [ownerClubId], references: [id], onDelete: Cascade)
+  ownerPromoter Promoter?     @relation("UnansweredOwnerPromoter", fields: [ownerPromoterId], references: [id], onDelete: Cascade)
+
+  @@index([ownerClubId, status], map: "unanswered_owner_club_status_idx")
+  @@index([ownerPromoterId, status], map: "unanswered_owner_promoter_status_idx")
+  @@map("unanswered_questions")
+}
+
+enum FeedbackKind {
+  ERROR
+  SUGGESTION
+  INTEGRATION
+  OTHER
+}
+
+/// Feedback de los testers del piloto. Deliberadamente mínimo: cuatro tipos,
+/// un texto y de dónde venía. Un sistema más grande no se llenaría.
+model BetaFeedback {
+  id String @id @default(cuid())
+
+  ownerType       ChannelOwnerType
+  ownerClubId     String?
+  ownerPromoterId String?
+
+  userId    String?
+  kind      FeedbackKind
+  message   String
+  /// La ruta desde la que se envió. Sin esto, la mitad del feedback empieza
+  /// por «en la pantalla esa de los eventos...».
+  path      String?
+  createdAt DateTime     @default(now())
+
+  ownerClub     Club?     @relation("FeedbackOwnerClub", fields: [ownerClubId], references: [id], onDelete: Cascade)
+  ownerPromoter Promoter? @relation("FeedbackOwnerPromoter", fields: [ownerPromoterId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@map("beta_feedback")
+}
+
+/// Conocimiento propio de un RRPP: cómo comprar con él, su contacto, cómo
+/// funciona su lista.
+///
+/// NO puede sobrescribir las reglas oficiales de un club. Eso lo garantiza
+/// el orden de autoridad en @nightlife/ai/knowledge, no la tabla.
+model PromoterKnowledge {
+  id         String   @id @default(cuid())
+  promoterId String
+  title      String
+  body       String
+  tags       String[] @default([])
+  isActive   Boolean  @default(true)
+
+  promoter Promoter @relation(fields: [promoterId], references: [id], onDelete: Cascade)
+
+  @@index([promoterId, isActive], map: "promoter_knowledge_active_idx")
+  @@map("promoter_knowledge")
+}
+
+model PromoterFAQ {
+  id         String   @id @default(cuid())
+  promoterId String
+  question   String
+  answer     String
+  keywords   String[] @default([])
+  intent     String?
+  isActive   Boolean  @default(true)
+  sortOrder  Int      @default(0)
+
+  promoter Promoter @relation(fields: [promoterId], references: [id], onDelete: Cascade)
+
+  @@index([promoterId, isActive], map: "promoter_faqs_active_idx")
+  @@map("promoter_faqs")
 }

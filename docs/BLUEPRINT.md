@@ -104,6 +104,39 @@ nightlife-automatico/
 └─ tests/
 ```
 
+## 5 bis. Design system — AFTER DARK
+
+Ver `docs/design-system.html` para el sistema ejecutándose con las pantallas en marcos de móvil.
+
+**La decisión central: la elevación se construye con luz, no con líneas.** Un panel lleno de bordes
+de 1px lee como software de administración por mucho que el color sea oscuro. Las superficies se
+separan por valor y por sombra difusa; las hairlines son excepcionales.
+
+| Decisión | Motivo |
+|---|---|
+| Dark por compromiso, no como opción | Gente que trabaja de noche, mirando el móvil desde la puerta o la cabina |
+| Negro con matiz violeta (`#0B0A10`) | El gris azulado es el color por defecto de todo el software |
+| Archivo variable a `wdth 118%` en titulares | Es lo que hace que un encabezado parezca cartel y no etiqueta de formulario |
+| Flyer a sangre en la tarjeta de evento | En nightlife la imagen es media decisión; una fila de tabla la tira |
+| Un solo acento protagonista (rosa) | El violeta es soporte; el resto del color significa estado, no decoración |
+| Tinta oscura sobre el acento | 5,50:1 frente a 3,59:1 del blanco. Cumple y queda mejor |
+| Sin librería de iconos ni de animación | Once SVG a mano y CSS. Es peso que viaja al móvil de un cliente |
+| Paleta de Tailwind vaciada | Un `bg-slate-800` despistado no compila. Tailwind solo hace layout |
+
+Dos mundos visuales a propósito: el **panel** es AFTER DARK; las **páginas públicas** las pinta el
+branding de cada club y el sistema solo aporta la forma. Sobre un acento elegido por el club, la
+tinta del botón se calcula (`readableInkOn`) para que un club con marca amarilla no acabe con un
+botón COMPRAR ilegible.
+
+Todo esto está defendido por tests: `design-system.test.ts` (una sola fuente de color, sin bordes en
+el panel, reduced-motion, lista explícita de componentes de cliente) y `contrast.test.ts` (lee los
+tokens del CSS y calcula ratios WCAG).
+
+**Microinteracciones:** entrada escalonada por `nth-child`, elevación al hover, escala al pulsar,
+skeletons con shimmer, etapas del import con check, y un anillo de éxito que dibuja la marca. Regla
+que las gobierna: *el teatro no miente* — las etapas de carga acompañan trabajo real y no hay
+esperas artificiales.
+
 ## 6. API architecture
 
 REST bajo `/api/v1`. Pipeline por handler: `rate limit → auth → tenant → autorización → Zod in → caso de uso → Zod out → audit`.

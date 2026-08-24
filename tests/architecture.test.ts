@@ -94,6 +94,45 @@ describe("secretos", () => {
       .map((f) => f.path);
     expect(offenders).toEqual([]);
   });
+
+  it("la API key de un club solo se toca en el módulo que la guarda", () => {
+    // `encryptedKey` es la columna con la credencial de Fourvenues de un
+    // cliente. Si aparece fuera de db/integrations.ts, alguien la está
+    // seleccionando, devolviendo o registrando en otro sitio.
+    const allowed = ["src/packages/db/integrations.ts"];
+    const offenders = sourceFiles
+      .filter((f) => !allowed.includes(f.path))
+      .filter((f) => /\bencryptedKey\b/.test(f.code))
+      .map((f) => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  it("ninguna respuesta de API devuelve una key de integración", () => {
+    // La vista segura se llama keyHint y son cuatro caracteres. Devolver
+    // `apiKey` desde una ruta sería mandar la credencial de vuelta al
+    // navegador.
+    const routes = sourceFiles.filter((f) => f.path.includes("src/app/api/"));
+    const offenders = routes
+      .filter((f) => /NextResponse\.json\([^)]*\bapiKey\b/s.test(f.code))
+      .map((f) => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  it("la key no se descifra fuera del módulo que la guarda", () => {
+    const allowed = ["src/packages/db/integrations.ts", "src/packages/core/secret-box.ts"];
+    const offenders = sourceFiles
+      .filter((f) => !allowed.includes(f.path))
+      .filter((f) => /\bimportMasterKey\b/.test(f.code))
+      .map((f) => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  it("nadie escribe una key en un log", () => {
+    const offenders = sourceFiles
+      .filter((f) => /console\.(log|error|warn|info)\([^)]*\b(apiKey|encryptedKey)\b/s.test(f.code))
+      .map((f) => f.path);
+    expect(offenders).toEqual([]);
+  });
 });
 
 describe("el widget público no persiste nada en el dispositivo", () => {

@@ -2,7 +2,7 @@ import { DEFAULT_TTL_SECONDS, dataPoint, type DataPoint } from "@nightlife/core/
 import type { AvailabilityState } from "@nightlife/ticketing/types";
 import type { ConversationContext, EventContext } from "@nightlife/ai/context";
 import type { Intent } from "@nightlife/ai/intents";
-import { prisma } from "./client";
+import type { DbClient } from "./owner";
 
 /**
  * Capa L2: reconstruye el contexto de conversación desde la base de datos.
@@ -10,6 +10,22 @@ import { prisma } from "./client";
  * Aquí es donde los datos vuelven a convertirse en DataPoints con su
  * procedencia. Es el único sitio que habla con la base de datos en nombre del
  * bot; el motor recibe el resultado y ya no consulta nada más.
+ *
+ * ── Por qué recibe el cliente en vez de cogerlo ──────────────────────
+ * Antes usaba el `prisma` global. Con RLS activo eso es el peor fallo
+ * posible: la consulta es válida, no da error y devuelve **cero filas**, así
+ * que el asistente concluye que el club no tiene eventos y lo dice. Un fallo
+ * silencioso que se parece a un dato.
+ *
+ * Ahora el cliente llega por parámetro, ya dentro de una transacción con el
+ * contexto fijado. Quien llama decide cuál — y al ser obligatorio, no se
+ * puede olvidar.
+ *
+ * El historial de la conversación tampoco se lee aquí, y es deliberado:
+ * `messages` es una tabla de PROPIEDAD y el catálogo del club no lo es. Para
+ * una conversación de RRPP se leen en contextos distintos, así que el
+ * historial entra por `options.history`, leído por quien tiene el contexto
+ * del dueño.
  *
  * Deliberadamente NO hay búsqueda vectorial: el precio vigente, la fecha y el
  * cartel son datos estructurados y se resuelven con SQL. El vector solo
@@ -36,15 +52,29 @@ export interface RetrievalOptions {
   readonly lastIntent?: Intent | null;
   readonly priceTtlSeconds?: number;
   readonly now?: Date;
+  /**
+   * Últimos turnos, leídos por el llamante DENTRO del contexto del dueño.
+   * No se consultan aquí: `messages` pertenece al dueño de la conversación,
+   * que puede no ser el club cuyo catálogo se está leyendo.
+   *
+   * Se esperan del más reciente al más antiguo, tal y como los devuelve
+   * `readConversationHistory`; aquí se les da la vuelta.
+   */
+  readonly history?: readonly {
+    readonly role: string;
+    readonly content: string;
+    readonly intent?: string | null;
+  }[];
 }
 
 export async function buildConversationContext(
+  db: DbClient,
   options: RetrievalOptions,
 ): Promise<ConversationContext | null> {
   const now = options.now ?? new Date();
   const priceTtl = options.priceTtlSeconds ?? DEFAULT_TTL_SECONDS.currentPrice;
 
-  const club = await prisma.club.findUnique({
+  const club = await db.club.findUnique({
     where: { id: options.clubId },
     include: {
       faqs: { where: { isActive: true }, orderBy: { sortOrder: "asc" }, take: 30 },
@@ -55,7 +85,7 @@ export async function buildConversationContext(
 
   // Eventos próximos: la ventana empieza 6 horas atrás porque una fiesta que
   // empezó a las 00:00 sigue siendo "esta noche" a las 03:00.
-  const upcoming = await prisma.event.findMany({
+  const upcoming = await db.event.findMany({
     where: {
       clubId: club.id,
       startsAt: { gte: new Date(now.getTime() - 6 * 3600 * 1000) },
@@ -156,16 +186,10 @@ export async function buildConversationContext(
   }
 
   const promoter = options.promoterId
-    ? await prisma.promoter.findUnique({ where: { id: options.promoterId } })
+    ? await db.promoter.findUnique({ where: { id: options.promoterId } })
     : null;
 
-  const history = options.conversationId
-    ? await prisma.message.findMany({
-        where: { conversationId: options.conversationId, role: { in: ["CUSTOMER", "ASSISTANT"] } },
-        orderBy: { createdAt: "desc" },
-        take: 6,
-      })
-    : [];
+  const history = options.history ?? [];
 
   return {
     club: {
@@ -208,15 +232,16 @@ export async function buildConversationContext(
       answer: f.answer,
       keywords: f.keywords,
     })),
-    history: history
+    // Copia antes de invertir: `history` llega readonly y `reverse()` muta.
+    history: [...history]
       .reverse()
       .map((m) => ({
         role: m.role === "CUSTOMER" ? ("CUSTOMER" as const) : ("ASSISTANT" as const),
         content: m.content,
-        intent: (m.intent as Intent | null) ?? null,
+        intent: ((m.intent ?? null) as Intent | null),
       })),
     promoter: promoter
-      ? { id: promoter.id, displayName: promoter.displayName, referralTag: promoter.slug }
+      ? { id: promoter.id, displayName: promoter.displayName }
       : null,
     partySize: options.partySize ?? null,
     lastIntent: options.lastIntent ?? null,

@@ -3,6 +3,7 @@ export * from "./parse";
 export * from "./normalize";
 export * from "./fourvenues";
 export * from "./manual";
+export * from "./fourvenues-api";
 
 import { FourvenuesPublicSource, type FourvenuesOptions } from "./fourvenues";
 import { ManualSource, type ManualEventInput } from "./manual";

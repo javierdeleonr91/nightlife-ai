@@ -1,4 +1,6 @@
 export * from "./intents";
+export * from "./language";
+export * from "./knowledge";
 export * from "./context";
 export * from "./factset";
 export * from "./validator";

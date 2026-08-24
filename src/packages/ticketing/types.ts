@@ -58,22 +58,24 @@ export interface EventRef {
   readonly externalId?: string;
 }
 
-export interface CheckoutOptions {
-  /**
-   * Etiqueta que se añade al enlace y que la ticketera recibe tal cual.
-   * La escribimos y nunca la leemos de vuelta: sirve para que el club vea el
-   * origen dentro de SU ticketera. No es atribución nuestra ni alimenta
-   * ningún cálculo de comisiones — la plataforma no toca el dinero de las
-   * entradas.
-   */
-  readonly referralTag?: string;
-}
+/*
+ * No hay opciones de checkout, y es deliberado.
+ *
+ * Un proveedor devuelve la URL que la ticketera publica, tal cual. No añade
+ * parámetros, no compone nada y no acepta que nadie le pida componerlo: si el
+ * promoter tiene su propia URL, esa URL entra por otro sitio
+ * (PromoterEvent.checkoutUrl) y la resuelve resolveCheckoutUrl en
+ * packages/core/checkout.ts.
+ *
+ * Inventar un `?promoter=` es afirmar un contrato con Fourvenues que no
+ * tenemos, igual de grave que inventar un precio.
+ */
 
 export interface TicketingProvider {
   readonly capabilities: ProviderCapabilities;
   getEvent(ref: EventRef): Promise<NormalizedEvent>;
   getEvents(ref: { profileUrl: string }): Promise<readonly NormalizedEvent[]>;
-  getCheckoutUrl(ref: EventRef, options?: CheckoutOptions): string | null;
+  getCheckoutUrl(ref: EventRef): string | null;
 }
 
 /*

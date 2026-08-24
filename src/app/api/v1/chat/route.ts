@@ -4,12 +4,20 @@ import { AppError } from "@nightlife/core/errors";
 import { runEngine } from "@nightlife/ai/engine";
 import { extractPartySize, type Intent } from "@nightlife/ai/intents";
 import { AnthropicProvider } from "@nightlife/ai/llm";
-import { hasFeature } from "@nightlife/core/billing";
+import { assistantAvailable } from "@nightlife/core/billing";
 import {
   buildConversationContext,
   getSubscriptionState,
   unsafePrismaForMigrationsOnly as prisma,
 } from "@nightlife/db";
+import { withPublicClubRls } from "@nightlife/db/owner";
+import {
+  openWebchatSession,
+  persistWebchatTurn,
+  readConversationHistory,
+  recordIncomingMessage,
+  resolveWebchatOwner,
+} from "@nightlife/db/webchat";
 import { hashCustomerHandle, signChatToken, verifyChatToken } from "@nightlife/auth";
 import { env } from "@nightlife/config/env";
 import { apiError, clientIp, parseBody, rateLimit } from "@/lib/api";
@@ -22,6 +30,17 @@ import { apiError, clientIp, parseBody, rateLimit } from "@/lib/api";
  * por IP y por conversación, y presupuesto diario por club. Cuando el
  * presupuesto se agota el bot no se calla: degrada a plantillas y sigue
  * vendiendo.
+ *
+ * ── Propiedad ────────────────────────────────────────────────────────
+ * Quien escribe aquí NO está autenticado: es un visitante de un perfil
+ * público. No hay Principal, y no se fabrica uno — el dueño se resuelve en
+ * el servidor a partir de los slugs, que se validan contra la base de datos
+ * antes de usarlos. Toda la escritura pasa por `@nightlife/db/webchat`, que
+ * abre una transacción con las variables de RLS fijadas.
+ *
+ * El cuerpo de la petición no lleva ni puede llevar `ownerType`,
+ * `ownerClubId` ni `ownerPromoterId`: no están en el esquema de Zod, así que
+ * si llegaran se descartarían antes de tocar nada.
  */
 
 const schema = z.object({
@@ -40,10 +59,14 @@ export async function POST(request: Request) {
 
     const body = await parseBody(request, schema);
 
-    const club = await prisma.club.findUnique({
-      where: { slug: body.clubSlug },
-      include: { aiConfig: true },
-    });
+    // `clubs` no está bajo RLS: es la tabla que resuelve el slug y tiene que
+    // poder leerse antes de fijar ningún club. `ai_configs` SÍ lo está, así
+    // que el presupuesto diario NO puede venir en un `include` desde aquí:
+    // con nl_app volvería `null` sin dar error y `overBudget` sería siempre
+    // `false` — el tope de gasto del club dejaría de existir en silencio. Se
+    // lee más abajo, dentro de la transacción que ya se abre con el club
+    // fijado para construir el contexto.
+    const club = await prisma.club.findUnique({ where: { slug: body.clubSlug } });
     if (!club || club.status !== "ACTIVE") throw AppError.notFound("Club");
     if (!club.botEnabled) {
       return NextResponse.json({
@@ -53,22 +76,33 @@ export async function POST(request: Request) {
       });
     }
 
-    const promoter = body.promoterSlug
-      ? await prisma.promoter.findUnique({
-          where: { slug: body.promoterSlug },
-          include: { clubs: { where: { clubId: club.id, status: "APPROVED" } } },
-        })
-      : null;
-    // Un promoter sin alta aprobada en este club no presta su nombre al bot.
-    const promoterId = promoter && promoter.clubs.length > 0 ? promoter.id : null;
+    // ── De quién es esta conversación ───────────────────────────────
+    // Se decide aquí, en el servidor, y no vuelve a cambiar. Si el visitante
+    // llega por el perfil de un RRPP aprobado en este club, la conversación
+    // es del RRPP y el club es solo el tema del que se habla.
+    const { owner, contextClubId, viaPromoterId } = await resolveWebchatOwner({
+      clubId: club.id,
+      promoterSlug: body.promoterSlug ?? null,
+    });
 
-    // El asistente es una feature de pago del promoter: es nuestro producto y
-    // tiene coste por conversación. Sin plan que lo incluya, su link sigue
-    // funcionando como escaparate —y llevando al checkout— pero el bot no
-    // responde en su nombre.
-    if (promoterId) {
-      const subscription = await getSubscriptionState("PROMOTER", promoterId);
-      if (!hasFeature(subscription, "ai_assistant")) {
+    // ── Beta cerrada ────────────────────────────────────────────────
+    // Fuera de la beta, el asistente es una feature de pago del promoter:
+    // es nuestro producto y cuesta dinero por conversación, así que sin plan
+    // que lo incluya su link seguiría funcionando como escaparate —y
+    // llevando al checkout— pero el bot no respondería en su nombre.
+    //
+    // Durante la beta cerrada no hay Stripe ni planes que contratar: los
+    // invitados no tienen fila en `subscriptions`, así que esta comprobación
+    // les cortaba el asistente entero. Que es justo lo que están aquí para
+    // probar.
+    //
+    // El interruptor es BETA_CERRADA en packages/core/billing.ts.
+    // `assistantAvailable` devuelve `true` mientras esté encendido y vuelve
+    // a mirar el plan cuando se apague. No se ha borrado nada de la
+    // infraestructura de suscripción: sigue entera y sigue compilando.
+    if (owner.type === "PROMOTER") {
+      const subscription = await getSubscriptionState("PROMOTER", owner.promoterId);
+      if (!assistantAvailable(subscription)) {
         return NextResponse.json({
           reply: null,
           assistantUnavailable: true,
@@ -78,78 +112,106 @@ export async function POST(request: Request) {
       }
     }
 
-    // ── conversación ────────────────────────────────────────────────
-    let conversationId: string | null = null;
+    // ── Conversación ────────────────────────────────────────────────
+    let previousConversationId: string | null = null;
     if (body.chatToken) {
       const claims = await verifyChatToken(body.chatToken, env().AUTH_SECRET);
-      if (claims && claims.clubId === club.id) conversationId = claims.conversationId;
+      if (claims && claims.clubId === club.id) previousConversationId = claims.conversationId;
     }
 
-    let conversation = conversationId
-      ? await prisma.conversation.findFirst({ where: { id: conversationId, clubId: club.id } })
-      : null;
+    // El identificador del visitante se hashea con pepper y con el id del
+    // DUEÑO, no del club: el mismo navegador escribiendo a Javier y a MON
+    // son dos clientes distintos que no se pueden cruzar.
+    const ownerSalt = owner.type === "CLUB" ? owner.clubId : owner.promoterId;
+    const visitorHash = await hashCustomerHandle(
+      `${ip}|${request.headers.get("user-agent") ?? ""}`,
+      `${env().CUSTOMER_HASH_PEPPER}:${ownerSalt}`,
+    );
 
-    if (!conversation) {
-      // Identificador del visitante hasheado con sal por club: el mismo
-      // navegador en dos clubs son dos clientes distintos y no se pueden cruzar.
-      const handleHash = await hashCustomerHandle(
-        `${ip}|${request.headers.get("user-agent") ?? ""}`,
-        `${env().CUSTOMER_HASH_PEPPER}:${club.id}`,
-      );
-      const customer = await prisma.customer.upsert({
-        where: {
-          clubId_channelType_externalHandleHash: {
-            clubId: club.id,
-            channelType: "WEBCHAT",
-            externalHandleHash: handleHash,
-          },
-        },
-        create: { clubId: club.id, channelType: "WEBCHAT", externalHandleHash: handleHash },
-        update: {},
-      });
+    const session = await openWebchatSession({
+      owner,
+      contextClubId,
+      visitorHash,
+      retentionDays: env().CONVERSATION_RETENTION_DAYS,
+      conversationId: previousConversationId,
+      viaPromoterId,
+    });
 
-      conversation = await prisma.conversation.create({
-        data: {
-          clubId: club.id,
-          customerId: customer.id,
-          promoterId,
-          channelType: "WEBCHAT",
-          // Retención RGPD decidida al crear, no "algún día limpiamos".
-          expiresAt: new Date(Date.now() + env().CONVERSATION_RETENTION_DAYS * 86_400_000),
-        },
-      });
-    }
+    rateLimit(`chat:conv:${session.conversationId}`, 20, 60);
 
-    rateLimit(`chat:conv:${conversation.id}`, 20, 60);
+    const chatToken = await signChatToken(
+      {
+        conversationId: session.conversationId,
+        clubId: club.id,
+        ...(viaPromoterId ? { promoterId: viaPromoterId } : {}),
+      },
+      env().AUTH_SECRET,
+    );
 
     // Mientras un humano está respondiendo, la IA se calla. Sin excepciones.
-    if (conversation.status === "HUMAN_ACTIVE" || conversation.status === "WAITING_HUMAN") {
-      await prisma.message.create({
-        data: { conversationId: conversation.id, clubId: club.id, role: "CUSTOMER", content: body.message },
+    // El mensaje entra igual: que el bot no conteste no puede significar que
+    // el cliente escriba al vacío.
+    if (session.status === "HUMAN_ACTIVE" || session.status === "WAITING_HUMAN") {
+      await recordIncomingMessage({
+        owner,
+        conversationId: session.conversationId,
+        content: body.message,
       });
-      return NextResponse.json({
-        reply: null,
-        waitingHuman: true,
-        chatToken: await signChatToken({ conversationId: conversation.id, clubId: club.id }, env().AUTH_SECRET),
-      });
+      return NextResponse.json({ reply: null, waitingHuman: true, chatToken });
     }
 
-    // ── contexto y motor ────────────────────────────────────────────
-    const partySize = extractPartySize(body.message) ?? conversation.partySize ?? null;
+    // Lo mismo si el dueño ha apagado la respuesta automática de su webchat.
+    if (!session.autoReply) {
+      await recordIncomingMessage({
+        owner,
+        conversationId: session.conversationId,
+        content: body.message,
+      });
+      return NextResponse.json({ reply: null, waitingHuman: true, chatToken });
+    }
 
-    const context = await buildConversationContext({
-      clubId: club.id,
-      eventId: conversation.eventFocusId,
-      promoterId,
-      conversationId: conversation.id,
-      partySize,
-      lastIntent: (conversation.lastIntent as Intent | null) ?? null,
-      priceTtlSeconds: env().PRICE_TTL_SECONDS,
-    });
+    // ── Contexto ────────────────────────────────────────────────────
+    // Dos lecturas en DOS contextos distintos, y la separación es el punto
+    // entero de este bloque:
+    //
+    //   · el historial es del DUEÑO de la conversación (tabla de propiedad)
+    //   · el catálogo es del CLUB del que se habla (datos que ese club ya
+    //     publica en su perfil)
+    //
+    // Para una conversación de club coinciden; para una de RRPP no, y
+    // leerlas en el mismo contexto sería o no ver el historial o darle al
+    // RRPP un contexto de club que no le toca.
+    const partySize = extractPartySize(body.message) ?? session.partySize ?? null;
+
+    const history = await readConversationHistory(owner, session.conversationId);
+
+    // El presupuesto diario viaja en la misma transacción: `ai_configs` está
+    // bajo RLS y este es el único sitio del flujo público donde el club ya
+    // está fijado. Ni una consulta de más — entra en el `Promise.all`.
+    const [context, aiConfig] = await withPublicClubRls(club.id, (tx) =>
+      Promise.all([
+        buildConversationContext(tx, {
+          clubId: club.id,
+          eventId: session.eventFocusId,
+          promoterId: viaPromoterId,
+          conversationId: session.conversationId,
+          partySize,
+          lastIntent: (session.lastIntent as Intent | null) ?? null,
+          priceTtlSeconds: env().PRICE_TTL_SECONDS,
+          history,
+        }),
+        tx.aiConfig.findUnique({
+          where: { clubId: club.id },
+          select: { spentTodayCents: true, dailyBudgetCents: true },
+        }),
+      ]),
+    );
     if (!context) throw AppError.notFound("Club");
 
-    const budget = club.aiConfig;
-    const overBudget = budget ? budget.spentTodayCents >= budget.dailyBudgetCents : false;
+    // ── Motor ───────────────────────────────────────────────────────
+    // Fuera de cualquier transacción: llamar al LLM con una conexión de base
+    // de datos abierta la retendría segundos enteros del pool.
+    const overBudget = aiConfig ? aiConfig.spentTodayCents >= aiConfig.dailyBudgetCents : false;
     const apiKey = env().LLM_API_KEY;
 
     const result = await runEngine(body.message, context, {
@@ -157,71 +219,35 @@ export async function POST(request: Request) {
       llmDisabled: overBudget,
     });
 
-    // ── persistencia ────────────────────────────────────────────────
-    await prisma.$transaction([
-      prisma.message.create({
-        data: {
-          conversationId: conversation.id,
-          clubId: club.id,
-          role: "CUSTOMER",
-          content: body.message,
-          intent: result.intent,
-        },
-      }),
-      prisma.message.create({
-        data: {
-          conversationId: conversation.id,
-          clubId: club.id,
-          role: "ASSISTANT",
-          content: result.text,
-          intent: result.intent,
-          // Trazabilidad interna: por qué el bot dijo lo que dijo.
-          provenanceJson: { sources: result.facts.provenance, resolvedBy: result.resolvedBy } as never,
-          model: result.model,
-          tokensIn: result.tokensIn,
-          tokensOut: result.tokensOut,
-          latencyMs: result.latencyMs,
-          validationPassed: result.violations.length === 0,
-        },
-      }),
-      prisma.conversation.update({
-        where: { id: conversation.id },
-        data: {
-          lastIntent: result.intent,
-          lastMessageAt: new Date(),
-          partySize,
-          eventFocusId: result.eventFocusId,
-          purchaseIntent: conversation.purchaseIntent || result.purchaseIntent,
-          status: result.requestsHandoff ? "WAITING_HUMAN" : conversation.status,
-        },
-      }),
-      // Log de observabilidad sin una sola palabra del cliente.
-      prisma.aiRequestLog.create({
-        data: {
-          clubId: club.id,
-          promoterId,
-          conversationId: conversation.id,
-          intent: result.intent,
-          resolvedBy: result.resolvedBy,
-          sources: [...new Set(result.facts.provenance.map((p) => p.type))],
-          model: result.model,
-          tokensIn: result.tokensIn,
-          tokensOut: result.tokensOut,
-          latencyMs: Date.now() - startedAt,
-          validationPassed: result.violations.length === 0,
-          validationErrors: result.violations.map((v) => v.code),
-        },
-      }),
-    ]);
+    // ── Persistencia ────────────────────────────────────────────────
+    await persistWebchatTurn({
+      owner,
+      conversationId: session.conversationId,
+      viaPromoterId,
+      customerMessage: body.message,
+      assistantMessage: result.text,
+      intent: result.intent,
+      resolvedBy: result.resolvedBy,
+      sources: [...new Set(result.facts.provenance.map((p) => p.type))],
+      provenance: result.facts.provenance,
+      model: result.model,
+      tokensIn: result.tokensIn,
+      tokensOut: result.tokensOut,
+      latencyMs: result.latencyMs,
+      totalLatencyMs: Date.now() - startedAt,
+      validationPassed: result.violations.length === 0,
+      validationErrors: result.violations.map((v) => v.code),
+      partySize,
+      eventFocusId: result.eventFocusId,
+      purchaseIntent: session.purchaseIntent || result.purchaseIntent,
+      requestsHandoff: result.requestsHandoff,
+    });
 
     return NextResponse.json({
       reply: result.text,
       cta: result.cta,
       waitingHuman: result.requestsHandoff,
-      chatToken: await signChatToken(
-        { conversationId: conversation.id, clubId: club.id, ...(promoterId ? { promoterId } : {}) },
-        env().AUTH_SECRET,
-      ),
+      chatToken,
     });
   } catch (error) {
     return apiError(error);

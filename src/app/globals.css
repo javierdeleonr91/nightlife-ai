@@ -1,52 +1,47 @@
+@import "../design/tokens.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+@import "../design/components.css";
+
 /*
- * Dos mundos visuales distintos y a propósito:
+ * Solo lo que no encaja en tokens ni en componentes.
  *
- *  · Páginas públicas: las pinta el branding del club con estilos en línea.
- *    Aquí solo se define el suelo para que nunca se vea un flash blanco.
- *  · Dashboard: SaaS limpio, tokens propios, sin heredar el color del club.
+ * Dos mundos visuales, a propósito:
+ *  · Panel      → AFTER DARK, el design system, comprometido con el oscuro.
+ *  · Páginas públicas → las pinta el branding de cada club. Ahí no mandamos
+ *    nosotros: manda la marca del club, y el sistema solo aporta la forma.
  */
 
-:root {
-  --dash-bg: #fbfafd;
-  --dash-surface: #ffffff;
-  --dash-line: #e6e1ee;
-  --dash-ink: #17131f;
-  --dash-muted: #6c6478;
-  --dash-accent: #a81352;
+html {
+  background: var(--nl-void);
+  -webkit-text-size-adjust: 100%;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --dash-bg: #0f0c15;
-    --dash-surface: #181320;
-    --dash-line: #2c2439;
-    --dash-ink: #efeaf5;
-    --dash-muted: #948ba4;
-    --dash-accent: #ff5d97;
-  }
-}
-
-html,
 body {
-  background: var(--dash-bg);
-  color: var(--dash-ink);
+  margin: 0;
+  background: var(--nl-base);
+  color: var(--nl-text);
+  font-family: var(--nl-ui);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
-/* Foco siempre visible: mucha gente usará esto con el móvil en una mano. */
-:focus-visible {
-  outline: 2px solid var(--dash-accent);
-  outline-offset: 2px;
+/* Los títulos del design system son versales; sin esto, los acentos del
+   español se comen el interlineado. */
+h1, h2, h3 { margin: 0; }
+p { margin: 0; }
+
+/* Evita el salto de layout mientras carga la variable font. */
+@supports (font-variation-settings: normal) {
+  .nl-display { font-synthesis-weight: none; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
-  }
-}
+img { max-width: 100%; display: block; }
+
+/* El scroll horizontal en móvil es el fallo que más se nota y el que más se
+   cuela. Se corta aquí de raíz. */
+body { overflow-x: hidden; }

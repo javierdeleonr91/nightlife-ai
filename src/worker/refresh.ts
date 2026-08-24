@@ -50,7 +50,7 @@ async function refreshDue(): Promise<void> {
       if (!source.sourceUrl) continue;
       try {
         const normalized = await provider.getEvent({ url: source.sourceUrl });
-        const { pricesChanged } = await refreshEventFromSource(source.eventId, normalized);
+        const { pricesChanged } = await refreshEventFromSource(source.eventId, normalized, source.event.clubId);
         console.log(
           `  ✓ ${source.event.name}${pricesChanged > 0 ? ` (${pricesChanged} precio(s) nuevos)` : ""}`,
         );

@@ -49,7 +49,7 @@ la venta, 25 € por salir. Pregúntale al bot *"¿cuánto cuesta?"* — tiene q
 Sin `LLM_API_KEY` el bot sigue funcionando: resuelve por plantillas y FAQ. Degrada, no rompe.
 
 ```bash
-npm test              # 159 tests
+npm test              # 188 tests
 npm run typecheck     # todo el proyecto
 npm run typecheck:core # solo el núcleo, sin node_modules
 npm run worker:refresh -- --loop
@@ -59,7 +59,15 @@ En producción, después de migrar: `psql "$DATABASE_URL" -f prisma/rls.sql`.
 
 ---
 
-## Las cuatro decisiones que sostienen el resto
+## El producto se ve
+
+`docs/design-system.html` — ábrelo en el navegador. Es **AFTER DARK**, el design system, con las
+pantallas clave en marcos de móvil. Usa exactamente los mismos tokens que el producto: no es una
+maqueta, es el sistema ejecutándose.
+
+---
+
+## Las cinco decisiones que sostienen el resto
 
 ### 1. Ningún dato externo se guarda como valor suelto
 
@@ -91,7 +99,25 @@ Recibe un `ConversationContext` ya resuelto. Si un dato no está ahí, para la I
 convierte "no inventar" en una propiedad verificable del sistema. Hay un test de arquitectura que
 falla el build si alguien mete un `fetch` en `packages/ai`.
 
-### 4. El LLM es la última capa, no la primera
+### 4. La elevación se construye con luz, no con líneas
+
+Un panel lleno de bordes de 1px lee como software de administración por mucho que el color sea
+oscuro. Aquí las superficies se separan por valor y por sombra difusa, y hay un test que falla el
+build si aparece una utilidad `border` en el panel.
+
+De ahí salen las demás decisiones visuales: el flyer ocupa la tarjeta entera y el texto va encima
+sobre un degradado; los titulares usan Archivo en ancho expandido para parecer cartel y no etiqueta
+de formulario; el negro tiene matiz violeta porque el gris azulado es el color por defecto de todo
+el software.
+
+Sin librería de iconos (once SVG a mano), sin librería de animación (todo CSS), y con la paleta de
+Tailwind vaciada a propósito para que un `bg-slate-800` despistado ni siquiera compile.
+
+El contraste no se juzga a ojo: `tests/contrast.test.ts` lee los tokens del CSS y calcula. Ya cazó
+dos fallos reales — el placeholder a 2,29:1 y el blanco sobre el acento a 3,59:1. Por eso el texto
+de los botones rosas es tinta oscura y no blanco: 5,50:1, cumple y además queda mejor.
+
+### 5. El LLM es la última capa, no la primera
 
 ```
 L0 Router determinista   ~30 % de los mensajes   coste 0
@@ -118,9 +144,11 @@ src/packages/     núcleo sin dependencias del framework
   auth/           PBKDF2 y JWT con WebCrypto (sirve en edge y en Node)
   db/             Prisma, repositorios con tenant, retrieval, import, suscripciones
   config/         entorno validado con Zod
+src/design/       tokens y componentes del design system (AFTER DARK)
+src/components/   design system en React, tarjetas, import, chat
 src/app/          páginas públicas, dashboards y API
 src/worker/       sync programado, se despliega aparte
-tests/            159 tests, incluidos los de arquitectura y modelo comercial
+tests/            188 tests: arquitectura, modelo comercial, design system y contraste
 ```
 
 Los alias `@nightlife/*` apuntan a `src/packages/*`. Cuando el equipo crezca, cada carpeta se mueve a
@@ -147,6 +175,10 @@ Los alias `@nightlife/*` apuntan a `src/packages/*`. Cuando el equipo crezca, ca
   vencer.
 - **No usa localStorage en las páginas públicas.** Nada persiste en el dispositivo del cliente, así
   que no hace falta banner de cookies estorbando la conversión. Hay un test que lo vigila.
+- **No finge que trabaja.** Las etapas del import acompañan una petición real y la última no se
+  marca hasta que llega la respuesta. Si la fuente contesta en 300 ms, se salta al resultado.
+- **No anima para quien no lo quiere.** Con `prefers-reduced-motion` se apaga todo. No
+  «animaciones más lentas»: ninguna.
 
 ---
 
@@ -185,3 +217,22 @@ Fase 1 completa: auth, club, promoter, evento, import con confirmación, links p
 motor validado y CTA al checkout. Planes y suscripciones de software modelados, con periodo de
 prueba y gating de features; el cobro con Stripe llega en Fase 5. Fases 2 a 5 en
 `docs/BLUEPRINT.md`.
+
+## Test de concurrencia del canje de invitaciones
+
+`tests/invite-db.test.ts` comprueba contra un Postgres real que dos canjes
+simultáneos del último uso de un código no pasan los dos. Necesita servidor y
+**no se ejecuta** sin una variable explícita, para que nadie lo lance contra la
+base de datos buena:
+
+```bash
+# Postgres desechable
+initdb -D /tmp/pgdata -U nl --auth=trust
+pg_ctl -D /tmp/pgdata -o "-k /tmp -p 55432" start
+createdb -h /tmp -p 55432 -U nl nltest
+
+INVITE_DB_TEST_DSN="postgresql://nl@/nltest?host=/tmp&port=55432" npm run test:db
+```
+
+Sin la variable, el test se salta y lo dice. Un test que se salta en silencio
+es un test que nadie sabe que nunca corre.

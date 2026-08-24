@@ -7,7 +7,7 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "rm -rf .next/types && tsc --noEmit",
     "typecheck:core": "tsc --noEmit -p tsconfig.core.json",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -16,7 +16,8 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
-    "worker:refresh": "tsx src/worker/refresh.ts"
+    "worker:refresh": "tsx src/worker/refresh.ts",
+    "test:db": "tsx --test tests/invite-db.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -26,6 +27,7 @@
     "next": "^15.1.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "server-only": "^0.0.1",
     "zod": "^3.24.1"
   },
   "devDependencies": {

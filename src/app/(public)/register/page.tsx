@@ -1,83 +1,53 @@
-"use client";
-
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { cookies, headers } from "next/headers";
 import Link from "next/link";
+import { LOCALE_COOKIE, resolveLocale, t } from "@nightlife/core/i18n";
+import { oauthConfigured } from "@/lib/oauth";
+import { AuthDivider, AuthProviders } from "@/components/auth-providers";
+import { LanguageSwitch } from "@/components/language-switch";
+import { PasswordForm } from "@/components/password-form";
 
-export default function RegisterPage() {
-  const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+/**
+ * Crear cuenta.
+ *
+ * Misma estructura que entrar, a propósito: quien se equivoca de pantalla no
+ * tiene que reorientarse. Y con proveedor no se pide nada más que un toque —
+ * el tipo de cuenta se elige después, en /onboarding, porque Google no sabe si
+ * llevas un club o haces RRPP y nosotros tampoco vamos a adivinarlo.
+ */
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setBusy(true);
-    setError(null);
-    const form = new FormData(event.currentTarget);
-    try {
-      const response = await fetch("/api/v1/auth/register", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          name: form.get("name"),
-          email: form.get("email"),
-          password: form.get("password"),
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error?.message ?? "No se ha podido crear la cuenta");
-      router.push("/onboarding");
-      router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Error inesperado");
-    } finally {
-      setBusy(false);
-    }
-  }
+export const dynamic = "force-dynamic";
+
+export default async function RegisterPage() {
+  const [cookieStore, headerStore] = await Promise.all([cookies(), headers()]);
+  const locale = resolveLocale({
+    cookie: cookieStore.get(LOCALE_COOKIE)?.value,
+    acceptLanguage: headerStore.get("accept-language"),
+  });
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center gap-6 px-5">
-      <h1 className="text-2xl font-bold">Crear cuenta</h1>
-      <form onSubmit={submit} className="space-y-3">
-        <input
-          name="name"
-          required
-          autoComplete="name"
-          placeholder="Nombre"
-          className="w-full rounded-lg border border-dash-line bg-dash-surface px-3 py-2.5 text-sm"
-        />
-        <input
-          name="email"
-          type="email"
-          required
-          autoComplete="email"
-          placeholder="Email"
-          className="w-full rounded-lg border border-dash-line bg-dash-surface px-3 py-2.5 text-sm"
-        />
-        <input
-          name="password"
-          type="password"
-          required
-          minLength={8}
-          autoComplete="new-password"
-          placeholder="Contraseña (mínimo 8 caracteres)"
-          className="w-full rounded-lg border border-dash-line bg-dash-surface px-3 py-2.5 text-sm"
-        />
-        {error ? <p className="text-sm text-rose-500">{error}</p> : null}
-        <button
-          type="submit"
-          disabled={busy}
-          className="w-full rounded-lg bg-dash-accent px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
-        >
-          {busy ? "Creando…" : "Crear cuenta"}
-        </button>
-      </form>
-      <p className="text-sm text-dash-muted">
-        ¿Ya tienes cuenta?{" "}
-        <Link href="/login" className="underline underline-offset-4">
-          Entrar
-        </Link>
-      </p>
-    </main>
+    <div className="nl-app grid min-h-dvh place-items-center px-5 py-10">
+      <div className="w-full max-w-sm">
+        <header className="nl-enter mb-7 flex items-start justify-between gap-4">
+          <div>
+            <p className="nl-eyebrow">Nightlife Automatico</p>
+            <h1 className="nl-display nl-h1 mt-2">{t("registerTitle", locale)}</h1>
+          </div>
+          <LanguageSwitch current={locale} next="/register" />
+        </header>
+
+        <div className="nl-enter grid gap-5">
+          <AuthProviders locale={locale} configured={oauthConfigured()} />
+          <AuthDivider locale={locale} />
+          <PasswordForm mode="register" locale={locale} next="/onboarding" />
+        </div>
+
+        <p className="nl-muted mt-6 text-[0.9375rem]">
+          {t("hasAccount", locale)}{" "}
+          <Link href="/login" className="underline underline-offset-4" style={{ color: "var(--nl-hot-ink)" }}>
+            {t("signIn", locale)}
+          </Link>
+        </p>
+      </div>
+    </div>
   );
 }

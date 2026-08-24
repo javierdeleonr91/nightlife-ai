@@ -1,8 +1,11 @@
 import { redirect } from "next/navigation";
 import { formatMoney, money } from "@nightlife/core/money";
-import { formatEventWhen } from "@nightlife/core/time";
+import { formatEventWhen, nightWeekdayEs } from "@nightlife/core/time";
 import { unsafePrismaForMigrationsOnly as prisma } from "@nightlife/db";
+import { withOwnerRls, withPublicClubRls } from "@nightlife/db/owner";
 import { requirePrincipal } from "@/lib/session";
+import { Page, PageHeader } from "@/components/app-shell";
+import { ButtonLink, EmptyState, Icon } from "@/components/ui";
 import { EventSelector } from "@/components/event-selector";
 
 /**
@@ -13,31 +16,70 @@ import { EventSelector } from "@/components/event-selector";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Los eventos de los clubs que ya aprobaron a este promoter.
+ *
+ * Dos detalles que costaron una tanda de errores de compilación:
+ *
+ *  · `promoterClubIds` es `readonly string[]` en el Principal — a propósito,
+ *    para que nadie lo modifique por accidente. Prisma pide un array mutable,
+ *    así que se copia aquí en lugar de aflojar el tipo del Principal.
+ *  · Las relaciones van en el `select` de forma explícita. Así el tipo que
+ *    sale de la consulta contiene de verdad `club`, `ticketTypes` y `prices`,
+ *    y los callbacks de abajo se tipan solos sin un `any` a la vista.
+ */
+// Una transacción por club, y no una sola con `clubId: { in: [...] }`.
+// El contexto de RLS es UN club: no existe una variable que signifique «estos
+// tres». Son pocas consultas —un RRPP trabaja con un puñado de discotecas— y
+// la alternativa sería relajar la política, que no se toca.
+async function loadAvailableEvents(clubIds: readonly string[]) {
+  const porClub = await Promise.all(clubIds.map((clubId) => loadClubEvents(clubId)));
+  return porClub
+    .flat()
+    .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())
+    .slice(0, 50);
+}
+
+function loadClubEvents(clubId: string) {
+  return withPublicClubRls(clubId, (tx) =>
+    tx.event.findMany({
+    where: {
+      clubId,
+      startsAt: { gte: new Date() },
+      status: "ACTIVE",
+    },
+    orderBy: { startsAt: "asc" },
+    take: 50,
+    select: {
+      id: true,
+      name: true,
+      imageUrl: true,
+      startsAt: true,
+      club: { select: { name: true, timezone: true } },
+      ticketTypes: {
+        select: {
+          status: true,
+          prices: { where: { isCurrent: true }, select: { amountCents: true } },
+        },
+      },
+    },
+    }),
+  );
+}
+
 export default async function PromoterEventsPage() {
   const principal = await requirePrincipal();
   if (!principal.promoterId) redirect("/onboarding");
 
   const [available, selected] = await Promise.all([
-    prisma.event.findMany({
-      where: {
-        clubId: { in: principal.promoterClubIds },
-        startsAt: { gte: new Date() },
-        status: "ACTIVE",
-      },
-      orderBy: { startsAt: "asc" },
-      take: 50,
-      include: {
-        club: true,
-        ticketTypes: { include: { prices: { where: { isCurrent: true } } } },
-      },
-    }),
-    prisma.promoterEvent.findMany({
-      where: { promoterId: principal.promoterId },
-      select: { eventId: true },
-    }),
+    loadAvailableEvents(principal.promoterClubIds),
+    withOwnerRls({ type: "PROMOTER", promoterId: principal.promoterId }, (tx) =>
+      tx.promoterEvent.findMany({
+        where: { promoterId: principal.promoterId },
+        select: { eventId: true },
+      }),
+    ),
   ]);
-
-  const selectedIds = selected.map((s) => s.eventId);
 
   const events = available.map((event) => {
     const cents = event.ticketTypes
@@ -48,26 +90,40 @@ export default async function PromoterEventsPage() {
       id: event.id,
       name: event.name,
       clubName: event.club.name,
-      when: formatEventWhen(event.startsAt, event.club.timezone),
+      when: `${nightWeekdayEs(event.startsAt, event.club.timezone)} ${formatEventWhen(event.startsAt, event.club.timezone)}`,
       price: cents !== undefined ? formatMoney(money(cents)) : "—",
+      imageUrl: event.imageUrl,
     };
   });
 
   return (
-    <main className="mx-auto w-full max-w-md space-y-6 px-4 py-8">
-      <header>
-        <h1 className="text-2xl font-bold">Mis eventos</h1>
-        <p className="text-sm text-dash-muted">Los que elijas aparecen en tu link personal.</p>
-      </header>
+    <Page>
+      <PageHeader
+        eyebrow="Estos aparecen en tu perfil público"
+        title="Mis eventos"
+        back={{ href: "/promoter/home", label: "Inicio" }}
+        crumbs={[{ label: "Inicio", href: "/promoter/home" }, { label: "Mis eventos" }]}
+      />
 
       {events.length === 0 ? (
-        <p className="text-sm text-dash-muted">
-          No hay eventos disponibles. Puede que tu alta en el club todavía esté pendiente de
-          aprobación.
-        </p>
+        <EmptyState
+          glyph={<Icon name="calendar" size={26} />}
+          title="Aún no hay eventos"
+          body="Los eventos vienen de las discotecas con las que trabajas. Cuando una discoteca te apruebe y publique una noche en Fourvenues, aparecerá aquí y podrás elegir si quieres mostrarla en tu perfil."
+          action={
+            <div className="flex flex-wrap justify-center gap-2">
+              <ButtonLink href="/promoter/clubs" variant="hot">
+                Ver mis discotecas
+              </ButtonLink>
+              <ButtonLink href="/promoter/integrations" variant="ghost">
+                Configurar Fourvenues
+              </ButtonLink>
+            </div>
+          }
+        />
       ) : (
-        <EventSelector events={events} initialSelected={selectedIds} />
+        <EventSelector events={events} initialSelected={selected.map((s) => s.eventId)} />
       )}
-    </main>
+    </Page>
   );
 }

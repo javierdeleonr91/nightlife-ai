@@ -1,0 +1,759 @@
+<title>After Dark</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,400..900;1,62..125,400..900&family=Instrument+Sans:ital,wght@0,400..700;1,400..700&family=Martian+Mono:wght@300..700&display=swap">
+
+<style>
+/* ════════════════════════════════════════════════════════════════════
+   AFTER DARK — los mismos tokens que van en el producto.
+   Esta página no imita el design system: lo ejecuta.
+   Comprometida con el oscuro a propósito, igual que el panel.
+   ════════════════════════════════════════════════════════════════════ */
+:root{
+  --void:#07060a; --base:#0b0a10;
+  --s1:#131119; --s2:#1b1823; --s3:#262130;
+  --text:#f5f2f8; --text2:#b3aac2; --text3:#7a7290; --text4:#56506a;
+  --hot:#ff2d6f; --hot-lift:#ff4680; --hot-ink:#ff7ba6; --hot-soft:rgba(255,45,111,.14);
+  --violet:#7b5cff; --violet-ink:#a68fff; --violet-soft:rgba(123,92,255,.14);
+  --live:#3ddc97; --live-soft:rgba(61,220,151,.13);
+  --warn:#ffb020; --warn-soft:rgba(255,176,32,.13);
+  --crit:#ff5c5c; --crit-soft:rgba(255,92,92,.13);
+  --lift1:0 1px 0 rgba(255,255,255,.04) inset, 0 8px 24px -14px rgba(0,0,0,.9);
+  --lift2:0 1px 0 rgba(255,255,255,.05) inset, 0 20px 48px -24px rgba(0,0,0,.95);
+  --lift3:0 1px 0 rgba(255,255,255,.06) inset, 0 32px 80px -32px rgba(0,0,0,1);
+  --glow:0 0 0 1px rgba(255,45,111,.28), 0 10px 40px -14px rgba(255,45,111,.5);
+  --display:"Archivo",system-ui,sans-serif;
+  --ui:"Instrument Sans",system-ui,sans-serif;
+  --mono:"Martian Mono",ui-monospace,monospace;
+  --r-sm:10px; --r-md:16px; --r-lg:22px; --r-xl:28px; --pill:999px;
+  --ease:cubic-bezier(.2,.8,.2,1); --ease-out:cubic-bezier(.16,1,.3,1);
+  --grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--base); color:var(--text);
+  font-family:var(--ui); font-size:15px; line-height:1.55;
+  -webkit-font-smoothing:antialiased; position:relative;
+  background-image:
+    radial-gradient(120% 70% at 88% -8%, rgba(255,45,111,.10), transparent 58%),
+    radial-gradient(90% 60% at 4% 2%, rgba(123,92,255,.09), transparent 52%);
+  background-attachment:fixed;
+}
+body::before{
+  content:""; position:fixed; inset:0; background-image:var(--grain);
+  opacity:.03; pointer-events:none; z-index:0; mix-blend-mode:overlay;
+}
+.wrap{position:relative; z-index:1; max-width:1180px; margin:0 auto; padding:0 22px}
+
+/* Tipografía */
+.display{font-family:var(--display); font-weight:800; font-stretch:118%;
+  letter-spacing:-.022em; line-height:1.02; text-transform:uppercase; text-wrap:balance; margin:0}
+.eyebrow{font-size:11px; font-weight:600; letter-spacing:.15em; text-transform:uppercase;
+  color:var(--text3); margin:0}
+.num{font-family:var(--mono); font-variant-numeric:tabular-nums; letter-spacing:-.04em}
+.muted{color:var(--text2)} .dim{color:var(--text3)}
+p{margin:0}
+h1,h2,h3,h4{margin:0}
+
+/* Cabecera */
+header.hero{padding:76px 0 56px}
+header.hero .display{font-size:clamp(3rem,12vw,7rem)}
+.thesis{max-width:46ch; color:var(--text2); font-size:18px; margin-top:22px}
+.pill-row{display:flex; flex-wrap:wrap; gap:8px; margin-top:26px}
+
+/* Secciones */
+section{padding:56px 0; scroll-margin-top:20px}
+.sec-head{display:flex; gap:14px; align-items:baseline; margin-bottom:28px}
+.sec-num{font-family:var(--mono); font-size:11px; color:var(--hot); padding-top:6px; flex:none}
+.sec-head h2{font-family:var(--display); font-weight:800; font-stretch:112%;
+  font-size:clamp(1.5rem,4vw,2.2rem); text-transform:uppercase; letter-spacing:-.02em}
+.lede{max-width:62ch; color:var(--text2); margin-bottom:26px}
+
+/* Componentes del sistema */
+.card{background:var(--s1); border-radius:var(--r-lg); box-shadow:var(--lift1);
+  overflow:hidden; position:relative; transition:transform .26s var(--ease), box-shadow .26s var(--ease), background .26s var(--ease)}
+.card.hoverable:hover{transform:translateY(-3px); box-shadow:var(--lift2); background:var(--s2)}
+.panel{background:var(--s1); border-radius:var(--r-lg); padding:20px}
+
+.btn{display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  font-family:var(--ui); font-size:15px; font-weight:600; padding:12px 20px; min-height:46px;
+  border:0; border-radius:var(--r-md); background:var(--s2); color:var(--text);
+  cursor:pointer; white-space:nowrap; text-decoration:none;
+  transition:transform .13s var(--ease), box-shadow .26s var(--ease), background .13s var(--ease)}
+.btn:active{transform:scale(.975)}
+.btn.hot{background:var(--hot); color:#fff; box-shadow:0 8px 28px -12px rgba(255,45,111,.75)}
+.btn.hot:hover{background:var(--hot-lift); box-shadow:0 12px 36px -12px rgba(255,45,111,.9)}
+.btn.ghost{background:transparent; color:var(--text2)}
+.btn.ghost:hover{background:var(--s2); color:var(--text)}
+.btn.lg{min-height:56px; padding:16px 28px; font-size:17px}
+.btn.block{width:100%}
+
+.badge{display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:600;
+  letter-spacing:.08em; text-transform:uppercase; padding:5px 10px; border-radius:var(--pill);
+  background:rgba(255,255,255,.06); color:var(--text2); white-space:nowrap}
+.badge.live{background:var(--live-soft); color:var(--live)}
+.badge.hot{background:var(--hot-soft); color:var(--hot-ink)}
+.badge.warn{background:var(--warn-soft); color:var(--warn)}
+.badge.crit{background:var(--crit-soft); color:var(--crit)}
+.badge.violet{background:var(--violet-soft); color:var(--violet-ink)}
+.dot{width:6px; height:6px; border-radius:50%; background:currentColor; flex:none}
+.dot.pulse{animation:pulse 2.4s var(--ease) infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+
+.price{font-family:var(--display); font-weight:800; font-stretch:112%;
+  font-variant-numeric:tabular-nums; letter-spacing:-.03em; line-height:1}
+.price.xl{font-size:40px} .price.lg{font-size:30px} .price.md{font-size:22px}
+
+.input{width:100%; font-family:var(--ui); font-size:15px; color:var(--text);
+  background:var(--s2); border:0; border-radius:var(--r-md); padding:14px 16px; min-height:50px}
+.input::placeholder{color:var(--text4)}
+.input.mono{font-family:var(--mono); font-size:13px}
+.label{font-size:13px; font-weight:600; color:var(--text2); display:block; margin-bottom:8px}
+
+:where(a,button,input,[tabindex]):focus-visible{
+  outline:none; box-shadow:0 0 0 2px var(--base), 0 0 0 4px var(--hot); border-radius:var(--r-sm)}
+
+/* Rejillas */
+.grid2{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:16px}
+.grid3{display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:14px}
+.grid4{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px}
+
+/* Paleta */
+.swatch{border-radius:var(--r-md); overflow:hidden; background:var(--s1)}
+.swatch .chip{height:76px}
+.swatch .meta{padding:11px 13px}
+.swatch b{display:block; font-size:13px; font-weight:600}
+.swatch code{font-family:var(--mono); font-size:10.5px; color:var(--text3)}
+
+/* Escala tipográfica */
+.type-row{display:grid; grid-template-columns:120px 1fr; gap:20px; align-items:baseline;
+  padding:16px 0; border-top:1px solid rgba(255,255,255,.055)}
+.type-row:first-child{border-top:0}
+.type-row .k{font-family:var(--mono); font-size:10.5px; color:var(--text3)}
+
+/* Marcos de dispositivo */
+.devices{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:26px; align-items:start}
+.phone{
+  width:100%; max-width:340px; margin:0 auto; border-radius:38px; padding:9px;
+  background:linear-gradient(160deg,#2a2535,#131119); box-shadow:var(--lift3)}
+.phone .screen{
+  border-radius:30px; overflow:hidden; background:var(--base); position:relative;
+  min-height:600px; display:flex; flex-direction:column}
+.phone .notch{position:absolute; top:8px; left:50%; transform:translateX(-50%);
+  width:88px; height:22px; border-radius:var(--pill); background:#07060a; z-index:5}
+.screen-body{flex:1; overflow:hidden; padding:44px 16px 16px}
+.caption{text-align:center; margin-top:14px; font-size:13px; color:var(--text3)}
+
+/* Tarjeta de evento */
+.event{border-radius:var(--r-lg); overflow:hidden; position:relative; background:var(--s1);
+  box-shadow:var(--lift1); transition:transform .26s var(--ease), box-shadow .26s var(--ease)}
+.event:hover{transform:translateY(-3px); box-shadow:var(--lift2)}
+.flyer{position:relative; aspect-ratio:3/4; overflow:hidden}
+.flyer .art{position:absolute; inset:0}
+.veil{position:absolute; inset:0; background:linear-gradient(to top,
+  rgba(7,6,10,.96) 0%, rgba(7,6,10,.72) 28%, rgba(7,6,10,.12) 62%, transparent 100%)}
+.event .top{position:absolute; inset:14px 14px auto; display:flex; justify-content:space-between; gap:8px}
+.event .body{position:absolute; inset:auto 0 0 0; padding:18px}
+.event .foot{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:18px; padding-top:12px}
+
+/* Arte generado: nada de imágenes externas, y encaja con el mundo visual */
+.art-a{background:
+  radial-gradient(70% 50% at 30% 20%, rgba(255,45,111,.85), transparent 60%),
+  radial-gradient(60% 60% at 80% 80%, rgba(123,92,255,.8), transparent 60%),
+  linear-gradient(160deg,#1a0f22,#07060a)}
+.art-b{background:
+  radial-gradient(65% 55% at 70% 25%, rgba(61,220,151,.6), transparent 62%),
+  radial-gradient(70% 60% at 20% 85%, rgba(123,92,255,.75), transparent 60%),
+  linear-gradient(200deg,#0f1622,#07060a)}
+.art-c{background:
+  radial-gradient(75% 60% at 50% 15%, rgba(255,176,32,.55), transparent 60%),
+  radial-gradient(60% 50% at 15% 90%, rgba(255,45,111,.7), transparent 60%),
+  linear-gradient(170deg,#22140f,#07060a)}
+.art-mono{display:grid; place-items:center}
+.art-mono span{font-family:var(--display); font-weight:800; font-stretch:125%;
+  font-size:5rem; color:rgba(255,255,255,.09); text-transform:uppercase}
+
+/* Etapas del import */
+.stage{display:flex; align-items:center; gap:12px; padding:11px 0; color:var(--text4); font-size:15px}
+.stage.done{color:var(--text2)} .stage.active{color:var(--text)}
+.mark{width:22px; height:22px; border-radius:50%; display:grid; place-items:center; flex:none;
+  background:var(--s2); font-size:11px}
+.stage.done .mark{background:var(--live-soft); color:var(--live)}
+.stage.active .mark{background:var(--hot-soft); color:var(--hot-ink)}
+.spinner{width:13px; height:13px; border-radius:50%; border:2px solid currentColor;
+  border-top-color:transparent; animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.progress{height:3px; border-radius:var(--pill); background:var(--s2); overflow:hidden}
+.progress i{display:block; height:100%; border-radius:inherit;
+  background:linear-gradient(90deg,var(--violet),var(--hot))}
+
+.ring{width:76px; height:76px; border-radius:50%; display:grid; place-items:center;
+  margin:0 auto; background:var(--live-soft); color:var(--live)}
+
+/* Barra de navegación */
+.nav{display:flex; gap:4px; padding:8px 12px; background:rgba(11,10,16,.85);
+  backdrop-filter:blur(18px) saturate(140%)}
+.nav a{flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;
+  padding:8px 6px; border-radius:var(--r-md); font-size:11px; font-weight:600;
+  color:var(--text3); text-decoration:none}
+.nav a[aria-current]{color:var(--text); background:var(--s2)}
+
+/* Empty state */
+.empty{display:grid; place-items:center; gap:16px; text-align:center; padding:44px 22px;
+  border-radius:var(--r-xl);
+  background:radial-gradient(70% 60% at 50% 0%, rgba(255,45,111,.09), transparent 70%), var(--s1)}
+.glyph{width:56px; height:56px; border-radius:var(--r-md); display:grid; place-items:center;
+  background:var(--s2); color:var(--hot-ink)}
+
+/* Tablas de principios */
+.rules{display:grid; gap:2px; border-radius:var(--r-lg); overflow:hidden}
+.rule{display:grid; grid-template-columns:auto 1fr; gap:14px; padding:16px 18px; background:var(--s1)}
+.rule .no{font-family:var(--mono); font-size:11px; color:var(--hot); padding-top:3px}
+.rule b{display:block; font-weight:600; margin-bottom:2px}
+.rule span{color:var(--text2); font-size:14px}
+
+.callout{border-left:3px solid var(--violet); background:var(--s1);
+  border-radius:0 var(--r-md) var(--r-md) 0; padding:16px 20px; margin:22px 0}
+.callout.good{border-left-color:var(--live)}
+
+footer.end{padding:40px 0 70px; color:var(--text4); font-size:13px}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important; transition:none!important}
+  .event:hover,.card.hoverable:hover{transform:none}
+}
+</style>
+
+<div class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">Design system · Nightlife Automatico</p>
+  <h1 class="display">After<br>Dark</h1>
+  <p class="thesis">
+    La decisión que define todo lo demás: <strong>la elevación se construye con luz, no con
+    líneas</strong>. Un panel lleno de bordes de 1px lee como software de administración. Un club
+    bien montado se lee por capas de negro y por dónde cae la luz.
+  </p>
+  <div class="pill-row">
+    <span class="badge hot">Dark por compromiso</span>
+    <span class="badge">Mobile-first</span>
+    <span class="badge violet">Sin librería de iconos</span>
+    <span class="badge live"><span class="dot pulse"></span>10 tests lo vigilan</span>
+  </div>
+</header>
+
+<!-- ── 01 principios ─────────────────────────────────────────── -->
+<section id="principios">
+  <div class="sec-head"><span class="sec-num">01</span><h2>Los seis principios</h2></div>
+  <p class="lede">
+    Cada uno responde a algo concreto que hace que un producto parezca genérico. No son gustos:
+    son reglas con motivo, y varias están comprobadas por tests que fallan el build.
+  </p>
+
+  <div class="rules">
+    <div class="rule"><span class="no">01</span><div>
+      <b>Luz, no líneas</b>
+      <span>Las superficies se separan por valor y por sombra difusa. Un test falla el build si
+      aparece una utilidad <code>border</code> en el panel.</span>
+    </div></div>
+    <div class="rule"><span class="no">02</span><div>
+      <b>El flyer manda</b>
+      <span>En nightlife la imagen es media decisión. Una fila de tabla la tira a la basura; el
+      cartel a sangre con el texto encima, no.</span>
+    </div></div>
+    <div class="rule"><span class="no">03</span><div>
+      <b>Negro con matiz violeta</b>
+      <span>El gris azulado es el color por defecto de todo el software. El violeta profundo tira
+      hacia la sala.</span>
+    </div></div>
+    <div class="rule"><span class="no">04</span><div>
+      <b>Titulares en ancho expandido</b>
+      <span>Archivo variable con <code>font-stretch: 118%</code>. Es lo que hace que un encabezado
+      parezca cartel y no etiqueta de formulario.</span>
+    </div></div>
+    <div class="rule"><span class="no">05</span><div>
+      <b>El teatro no miente</b>
+      <span>Las animaciones de carga acompañan trabajo real. Si la fuente contesta en 300 ms, se
+      salta al resultado. Fingir esfuerzo es tan barato como un spinner, solo que más largo.</span>
+    </div></div>
+    <div class="rule"><span class="no">06</span><div>
+      <b>Un solo protagonista</b>
+      <span>El rosa. El violeta es soporte y nunca compite; el resto del color es semántico y
+      significa estado, no decoración.</span>
+    </div></div>
+  </div>
+</section>
+
+<!-- ── 02 color ──────────────────────────────────────────────── -->
+<section id="color">
+  <div class="sec-head"><span class="sec-num">02</span><h2>Color</h2></div>
+  <p class="lede">
+    Cinco fondos, cuatro niveles de texto, un acento y cuatro semánticos. Los literales solo
+    existen en el archivo de tokens: hay un test que lo comprueba, y ya cazó tres fugas.
+  </p>
+
+  <div class="grid4">
+    <div class="swatch"><div class="chip" style="background:#07060a"></div>
+      <div class="meta"><b>void</b><code>#07060A</code></div></div>
+    <div class="swatch"><div class="chip" style="background:#0b0a10"></div>
+      <div class="meta"><b>base</b><code>#0B0A10</code></div></div>
+    <div class="swatch"><div class="chip" style="background:#131119"></div>
+      <div class="meta"><b>surface 1</b><code>#131119</code></div></div>
+    <div class="swatch"><div class="chip" style="background:#1b1823"></div>
+      <div class="meta"><b>surface 2</b><code>#1B1823</code></div></div>
+    <div class="swatch"><div class="chip" style="background:#262130"></div>
+      <div class="meta"><b>surface 3</b><code>#262130</code></div></div>
+  </div>
+
+  <div class="grid4" style="margin-top:12px">
+    <div class="swatch"><div class="chip" style="background:#ff2d6f"></div>
+      <div class="meta"><b>hot</b><code>#FF2D6F</code></div></div>
+    <div class="swatch"><div class="chip" style="background:#7b5cff"></div>
+      <div class="meta"><b>violet</b><code>#7B5CFF</code></div></div>
+    <div class="swatch"><div class="chip" style="background:#3ddc97"></div>
+      <div class="meta"><b>live</b><code>#3DDC97</code></div></div>
+    <div class="swatch"><div class="chip" style="background:#ffb020"></div>
+      <div class="meta"><b>warn</b><code>#FFB020</code></div></div>
+    <div class="swatch"><div class="chip" style="background:#ff5c5c"></div>
+      <div class="meta"><b>crit</b><code>#FF5C5C</code></div></div>
+  </div>
+
+  <div class="callout">
+    <p class="eyebrow" style="margin-bottom:6px">Sobre el blanco</p>
+    <p class="muted">El texto nunca es <code>#FFF</code> puro. Sobre negro profundo el blanco puro
+    vibra y cansa la vista, y esto lo va a mirar gente a las cuatro de la mañana. El texto base es
+    <code>#F5F2F8</code>: blanco con una gota de violeta.</p>
+  </div>
+</section>
+
+<!-- ── 03 tipografía ─────────────────────────────────────────── -->
+<section id="tipografia">
+  <div class="sec-head"><span class="sec-num">03</span><h2>Tres voces</h2></div>
+  <p class="lede">
+    Archivo para titulares, Instrument Sans para interfaz, Martian Mono solo para cifras. Se
+    autoalojan con <code>next/font</code>: cero peticiones externas y cero salto de layout.
+  </p>
+
+  <div class="panel">
+    <div class="type-row">
+      <span class="k">display / 800 / wdth 118</span>
+      <span class="display" style="font-size:clamp(1.6rem,5vw,2.6rem)">Summer Closing</span>
+    </div>
+    <div class="type-row">
+      <span class="k">h3 / 700 / wdth 108</span>
+      <span class="display" style="font-size:22px; font-stretch:108%">Próxima noche</span>
+    </div>
+    <div class="type-row">
+      <span class="k">eyebrow / 11 / .15em</span>
+      <span class="eyebrow">Sábado 29 ago · 00:00</span>
+    </div>
+    <div class="type-row">
+      <span class="k">ui / 15</span>
+      <span>El asistente responde con el precio vigente y lleva al checkout de Fourvenues.</span>
+    </div>
+    <div class="type-row">
+      <span class="k">mono / tabular</span>
+      <span class="num">20,00 € · 18 · 00:30 · 2.º release</span>
+    </div>
+  </div>
+</section>
+
+<!-- ── 04 componentes ────────────────────────────────────────── -->
+<section id="componentes">
+  <div class="sec-head"><span class="sec-num">04</span><h2>Componentes</h2></div>
+  <p class="lede">Pásale el ratón por encima y pulsa: el movimiento forma parte del sistema.</p>
+
+  <div class="grid2">
+    <div class="panel">
+      <p class="eyebrow" style="margin-bottom:14px">Botones</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px">
+        <button class="btn hot">Comprar entrada</button>
+        <button class="btn">Actualizar</button>
+        <button class="btn ghost">Cancelar</button>
+      </div>
+      <button class="btn hot lg block" style="margin-top:12px">Compartir</button>
+    </div>
+
+    <div class="panel">
+      <p class="eyebrow" style="margin-bottom:14px">Estados</p>
+      <div style="display:flex; flex-wrap:wrap; gap:8px">
+        <span class="badge live"><span class="dot pulse"></span>A la venta</span>
+        <span class="badge crit"><span class="dot"></span>Agotado</span>
+        <span class="badge warn"><span class="dot"></span>Sin confirmar</span>
+        <span class="badge hot">Ahora</span>
+        <span class="badge violet">Precio manual</span>
+        <span class="badge">Webchat</span>
+      </div>
+      <p class="dim" style="margin-top:14px; font-size:13px">
+        El punto que respira permite leer el estado de reojo, sin tener que leerlo.
+      </p>
+    </div>
+
+    <div class="panel">
+      <p class="eyebrow" style="margin-bottom:14px">Precio</p>
+      <div style="display:flex; align-items:baseline; gap:16px; flex-wrap:wrap">
+        <span class="price xl">20 €</span>
+        <span class="muted">luego <span class="price md">25 €</span></span>
+      </div>
+      <p class="dim" style="margin-top:12px; font-size:13px">
+        Cifras en la face de titular: el precio es contenido, no un dato de tabla.
+      </p>
+    </div>
+
+    <div class="panel">
+      <p class="eyebrow" style="margin-bottom:14px">Entrada</p>
+      <label class="label" for="demo">URL del evento</label>
+      <input id="demo" class="input mono" placeholder="https://fourvenues.com/…">
+      <p class="dim" style="margin-top:10px; font-size:13px">
+        Relleno, sin borde. El borde de 1px es la firma del formulario corporativo; el foco se
+        marca con luz.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ── 05 eventos ────────────────────────────────────────────── -->
+<section id="eventos">
+  <div class="sec-head"><span class="sec-num">05</span><h2>Eventos, no filas</h2></div>
+  <p class="lede">
+    El cartel ocupa la tarjeta entera y el texto va encima sobre un degradado, no en una caja
+    aparte. El estado arriba, el precio y el CTA abajo. La última tarjeta enseña el sustituto
+    cuando un evento no tiene flyer: un cartel generado, no un hueco gris.
+  </p>
+
+  <div class="grid3">
+    <article class="event">
+      <div class="flyer"><div class="art art-a"></div><div class="veil"></div>
+        <div class="top">
+          <span class="badge live"><span class="dot pulse"></span>A la venta</span>
+        </div>
+        <div class="body">
+          <p class="eyebrow" style="color:var(--hot-ink)">Sábado · sáb 29 ago · 00:00</p>
+          <h3 class="display" style="font-size:1.4rem; margin-top:6px">Summer Closing</h3>
+          <p class="muted" style="font-size:13px; margin-top:4px">DJ X · DJ Y</p>
+        </div>
+      </div>
+      <div class="foot"><span class="price lg">20 €</span>
+        <a class="btn hot" href="#eventos">Comprar</a></div>
+    </article>
+
+    <article class="event">
+      <div class="flyer"><div class="art art-b"></div><div class="veil"></div>
+        <div class="top">
+          <span class="badge crit"><span class="dot"></span>Agotado</span>
+        </div>
+        <div class="body">
+          <p class="eyebrow" style="color:var(--hot-ink)">Viernes · vie 5 sep · 23:59</p>
+          <h3 class="display" style="font-size:1.4rem; margin-top:6px">Warehouse</h3>
+          <p class="muted" style="font-size:13px; margin-top:4px">Nina Kraviz</p>
+        </div>
+      </div>
+      <div class="foot"><span class="price md dim">Agotado</span></div>
+    </article>
+
+    <article class="event">
+      <div class="flyer"><div class="art art-mono" style="background:
+          radial-gradient(80% 60% at 50% 20%, rgba(255,45,111,.3), transparent 70%),
+          linear-gradient(160deg,#262130,#131119)"><span>WI</span></div><div class="veil"></div>
+        <div class="top">
+          <span class="badge warn"><span class="dot"></span>Sin confirmar</span>
+        </div>
+        <div class="body">
+          <p class="eyebrow" style="color:var(--hot-ink)">Viernes · vie 3 oct · 00:00</p>
+          <h3 class="display" style="font-size:1.4rem; margin-top:6px">Winter Opening</h3>
+        </div>
+      </div>
+      <div class="foot"><span class="price md muted">Ver precio</span></div>
+    </article>
+  </div>
+</section>
+
+<!-- ── 06 import ─────────────────────────────────────────────── -->
+<section id="import">
+  <div class="sec-head"><span class="sec-num">06</span><h2>Importar es la primera impresión</h2></div>
+  <p class="lede">
+    Es el momento en que un club decide si esto está hecho para él. Un formulario con un spinner
+    dice «software». Una secuencia que le cuenta qué está leyendo dice «esto sabe de lo mío».
+  </p>
+
+  <div class="devices">
+    <div>
+      <div class="phone"><div class="screen"><div class="notch"></div>
+        <div class="screen-body">
+          <span class="badge violet">Fourvenues</span>
+          <h3 class="display" style="font-size:1.75rem; margin-top:10px">Pega el enlace</h3>
+          <p class="muted" style="margin-top:8px; font-size:14px">
+            Copia la URL pública del evento y nos ocupamos del resto.
+          </p>
+          <input class="input mono" style="margin-top:18px" placeholder="https://fourvenues.com/…">
+          <p class="dim" style="font-size:13px; margin-top:10px">
+            Solo leemos la página pública.
+          </p>
+          <button class="btn hot block" style="margin-top:16px">Importar</button>
+        </div>
+      </div></div>
+      <p class="caption">1 · Un campo. Nada más.</p>
+    </div>
+
+    <div>
+      <div class="phone"><div class="screen"><div class="notch"></div>
+        <div class="screen-body">
+          <span class="badge violet">Leyendo</span>
+          <h3 class="display" style="font-size:1.75rem; margin-top:10px">Un momento</h3>
+          <div class="progress" style="margin-top:20px"><i style="width:62%"></i></div>
+          <div style="margin-top:12px">
+            <div class="stage done"><span class="mark">✓</span>Leyendo el evento</div>
+            <div class="stage done"><span class="mark">✓</span>Comprobando los releases</div>
+            <div class="stage active"><span class="mark"><span class="spinner"></span></span>Buscando el precio de ahora</div>
+            <div class="stage"><span class="mark"></span>Verificando el enlace de compra</div>
+          </div>
+        </div>
+      </div></div>
+      <p class="caption">2 · Las etapas acompañan trabajo real.</p>
+    </div>
+
+    <div>
+      <div class="phone"><div class="screen"><div class="notch"></div>
+        <div style="position:relative; aspect-ratio:16/10">
+          <div class="art art-a" style="position:absolute; inset:0"></div>
+          <div class="veil"></div>
+          <div style="position:absolute; inset:auto 0 0 0; padding:20px">
+            <p class="eyebrow" style="color:var(--hot-ink)">sábado, 29 de agosto · Mon Madrid</p>
+            <h3 class="display" style="font-size:1.6rem; margin-top:6px">Summer Closing</h3>
+          </div>
+        </div>
+        <div style="padding:18px 16px">
+          <div style="display:flex; justify-content:space-between; align-items:flex-end">
+            <div><p class="eyebrow">Precio ahora</p><p class="price xl" style="margin-top:4px">20 €</p></div>
+            <div style="text-align:right"><p class="eyebrow">Después</p>
+              <p class="price md muted" style="margin-top:4px">25 €</p></div>
+          </div>
+
+          <div style="display:grid; gap:6px; margin-top:16px">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;
+              background:var(--s2); border-radius:var(--r-md); padding:11px 14px; font-size:14px">
+              <span>Early Bird</span>
+              <span style="display:flex; gap:10px; align-items:center">
+                <span class="num" style="font-size:13px">15 €</span>
+                <span class="badge">Agotado</span></span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;
+              background:var(--s2); border-radius:var(--r-md); padding:11px 14px; font-size:14px">
+              <span>2.º release</span>
+              <span style="display:flex; gap:10px; align-items:center">
+                <span class="num" style="font-size:13px">20 €</span>
+                <span class="badge live">A la venta</span></span>
+            </div>
+          </div>
+
+          <button class="btn hot block" style="margin-top:16px">Confirmar y añadir</button>
+        </div>
+      </div></div>
+      <p class="caption">3 · El club ve su propio evento, no una ficha.</p>
+    </div>
+
+    <div>
+      <div class="phone"><div class="screen" style="justify-content:center"><div class="notch"></div>
+        <div style="text-align:center; padding:40px 24px">
+          <span class="ring">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M5 12.5 10 17.5 19 7" stroke="currentColor" stroke-width="2.4"
+                stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          <h3 class="display" style="font-size:1.5rem; margin-top:18px">Evento añadido</h3>
+          <p class="muted" style="margin-top:8px">Tu asistente ya puede venderlo.</p>
+        </div>
+      </div></div>
+      <p class="caption">4 · Y te lleva al evento, no a una lista.</p>
+    </div>
+  </div>
+
+  <div class="callout good">
+    <p class="eyebrow" style="margin-bottom:6px">La regla que me impuse</p>
+    <p class="muted">
+      El teatro no miente. Las etapas avanzan mientras la petición está de verdad en vuelo y la
+      última no se marca hasta que llega la respuesta. Si la fuente contesta rápido, se salta
+      directo al resultado. Lo único añadido en todo el flujo son 380 ms para que se vea
+      completarse el último check.
+    </p>
+  </div>
+</section>
+
+<!-- ── 07 pantallas ──────────────────────────────────────────── -->
+<section id="pantallas">
+  <div class="sec-head"><span class="sec-num">07</span><h2>Las pantallas</h2></div>
+  <p class="lede">
+    El panel del club abre por «Hoy», no por un dashboard de métricas: lo que importa es el estado
+    de la noche. El promoter vive en el móvil, de pie, con una mano.
+  </p>
+
+  <div class="devices">
+    <div>
+      <div class="phone"><div class="screen"><div class="notch"></div>
+        <div class="screen-body" style="padding-bottom:0">
+          <p class="eyebrow">Madrid</p>
+          <h3 class="display" style="font-size:1.9rem; margin-top:6px">Hoy</h3>
+
+          <a class="btn hot block" href="#pantallas" style="margin-top:16px">
+            2 personas esperan respuesta</a>
+
+          <div class="card" style="margin-top:14px">
+            <div style="position:relative; aspect-ratio:16/9">
+              <div class="art art-a" style="position:absolute; inset:0"></div>
+              <div class="veil"></div>
+              <div style="position:absolute; inset:auto 0 0 0; padding:16px;
+                display:flex; justify-content:space-between; align-items:flex-end; gap:10px">
+                <div style="min-width:0">
+                  <p class="eyebrow" style="color:var(--hot-ink)">Próxima · sábado</p>
+                  <h4 class="display" style="font-size:1.25rem; margin-top:4px">Summer Closing</h4>
+                </div>
+                <div style="text-align:right"><p class="eyebrow">Ahora</p>
+                  <p class="price lg" style="margin-top:2px">20 €</p></div>
+              </div>
+            </div>
+            <div style="padding:14px">
+              <span class="badge live"><span class="dot pulse"></span>Asistente activo</span>
+            </div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px">
+            <div class="card" style="box-shadow:none; padding:14px">
+              <p class="eyebrow">Fourvenues</p>
+              <p class="display" style="font-size:1.5rem; color:var(--live); margin-top:4px">Al día</p>
+            </div>
+            <div class="card" style="box-shadow:none; padding:14px">
+              <p class="eyebrow">Esperando</p>
+              <p class="display" style="font-size:1.5rem; color:var(--crit); margin-top:4px">2</p>
+            </div>
+          </div>
+        </div>
+        <nav class="nav">
+          <a href="#pantallas" aria-current="page">Hoy</a>
+          <a href="#pantallas">Eventos</a>
+          <a href="#pantallas">Chats</a>
+          <a href="#pantallas">Mi página</a>
+        </nav>
+      </div></div>
+      <p class="caption">Club · el estado de la noche</p>
+    </div>
+
+    <div>
+      <div class="phone"><div class="screen"><div class="notch"></div>
+        <div class="screen-body" style="padding-bottom:0">
+          <p class="eyebrow">Club Neon · Mon Madrid</p>
+          <h3 class="display" style="font-size:1.9rem; margin-top:6px">Alex</h3>
+
+          <div class="card" style="margin-top:16px; padding:18px; background:
+            radial-gradient(120% 100% at 80% 0%, rgba(255,45,111,.16), transparent 65%), var(--s1)">
+            <p class="eyebrow">Mi link</p>
+            <p class="display" style="font-size:1.5rem; text-transform:lowercase; margin-top:4px">/alex</p>
+            <button class="btn hot block lg" style="margin-top:14px">Compartir</button>
+          </div>
+
+          <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:14px">
+            <span class="badge live"><span class="dot pulse"></span>Asistente respondiendo</span>
+            <span class="badge">3 clubs</span>
+          </div>
+
+          <p class="eyebrow" style="margin-top:20px">Mis próximas noches</p>
+          <div class="card" style="box-shadow:none; margin-top:8px; padding:14px;
+            display:flex; justify-content:space-between; gap:10px; align-items:center">
+            <div style="min-width:0">
+              <p class="eyebrow" style="color:var(--hot-ink)">sáb 29 ago · 00:00</p>
+              <p style="font-weight:600; margin-top:2px">Summer Closing</p>
+              <p class="dim" style="font-size:13px">Club Neon</p>
+            </div>
+            <span class="price md">20 €</span>
+          </div>
+        </div>
+        <nav class="nav">
+          <a href="#pantallas" aria-current="page">Inicio</a>
+          <a href="#pantallas">Eventos</a>
+          <a href="#pantallas">Mi link</a>
+          <a href="#pantallas">Plan</a>
+        </nav>
+      </div></div>
+      <p class="caption">Promoter · compartir es lo primero</p>
+    </div>
+
+    <div>
+      <div class="phone"><div class="screen"><div class="notch"></div>
+        <div class="screen-body">
+          <p class="eyebrow">Club Neon</p>
+          <h3 class="display" style="font-size:1.9rem; margin-top:6px">Eventos</h3>
+
+          <div class="empty" style="margin-top:22px">
+            <span class="glyph">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 9a2 2 0 0 0 0 6v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a2 2 0 0 1 0-6V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2z"/>
+                <path d="M15 4v16" stroke-dasharray="2 3"/>
+              </svg>
+            </span>
+            <div>
+              <h4 class="display" style="font-size:1.25rem; font-stretch:108%">Todavía no hay eventos</h4>
+              <p class="muted" style="margin-top:8px; font-size:14px">
+                Importa tu primer evento de Fourvenues y deja que el asistente empiece a vender por
+                ti. Tarda menos de un minuto.
+              </p>
+            </div>
+            <button class="btn hot">Importar evento</button>
+          </div>
+        </div>
+      </div></div>
+      <p class="caption">Vacío · el momento en que más falta hace decir qué hacer</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── 08 lo que no ──────────────────────────────────────────── -->
+<section id="no">
+  <div class="sec-head"><span class="sec-num">08</span><h2>Lo que el sistema no hace</h2></div>
+
+  <div class="rules">
+    <div class="rule"><span class="no">—</span><div>
+      <b>No hay librería de iconos</b>
+      <span>Once iconos dibujados a mano, unas doce líneas de SVG cada uno. Una librería entera por
+      once glifos es peso que viaja al móvil de alguien con mala cobertura.</span>
+    </div></div>
+    <div class="rule"><span class="no">—</span><div>
+      <b>No hay librería de animación</b>
+      <span>Todo es CSS. El escalonado de las listas sale de <code>nth-child</code>, no de un
+      runtime de 40 kB.</span>
+    </div></div>
+    <div class="rule"><span class="no">—</span><div>
+      <b>No hay paleta de Tailwind</b>
+      <span>Está vaciada en la config a propósito: un <code>bg-slate-800</code> despistado ni
+      siquiera compila. Tailwind solo hace layout.</span>
+    </div></div>
+    <div class="rule"><span class="no">—</span><div>
+      <b>Casi no hay componentes de cliente</b>
+      <span>Nueve archivos llevan <code>"use client"</code> y el test los lista uno a uno: añadir
+      el décimo tiene que ser una decisión, no un descuido.</span>
+    </div></div>
+    <div class="rule"><span class="no">—</span><div>
+      <b>No hay movimiento para quien no lo quiere</b>
+      <span>Con <code>prefers-reduced-motion</code> se apaga todo. No «animaciones más lentas»:
+      ninguna.</span>
+    </div></div>
+  </div>
+
+  <div class="callout">
+    <p class="eyebrow" style="margin-bottom:6px">Dos mundos visuales, a propósito</p>
+    <p class="muted">
+      Todo esto es el <strong>panel</strong>, y está comprometido con el oscuro. Las páginas
+      públicas son otra cosa: ahí manda el branding de cada club —su color, su logo, su tipografía—
+      y el sistema solo aporta la forma. Un club tiene que sentir que esa página es suya, no
+      nuestra.
+    </p>
+  </div>
+</section>
+
+<footer class="end">
+  After Dark · design system de Nightlife Automatico · 21 de agosto de 2026.
+  Los tokens de esta página son los mismos que van en el producto.
+</footer>
+
+</div>

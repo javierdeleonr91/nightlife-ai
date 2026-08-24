@@ -49,7 +49,7 @@ async function main() {
 
   const ownerUser = await prisma.user.upsert({
     where: { email: "neon@example.com" },
-    create: { email: "neon@example.com", name: "Marta (Club Neon)", passwordHash: password },
+    create: { email: "neon@example.com", name: "Marta (Club Neon)", passwordHash: password, accountType: "CLUB" },
     update: {},
   });
 
@@ -171,7 +171,7 @@ async function main() {
   // ── promoter ──────────────────────────────────────────────────────
   const promoterUser = await prisma.user.upsert({
     where: { email: "alex@example.com" },
-    create: { email: "alex@example.com", name: "Alex", passwordHash: password },
+    create: { email: "alex@example.com", name: "Alex", passwordHash: password, accountType: "PROMOTER" },
     update: {},
   });
 
@@ -197,7 +197,9 @@ async function main() {
 
   await prisma.promoterEvent.upsert({
     where: { promoterId_eventId: { promoterId: promoter.id, eventId: event.id } },
-    create: { promoterId: promoter.id, eventId: event.id, clubId: club.id, referralTag: "alex" },
+    // Sin checkoutUrl: este promoter no tiene URL propia de Fourvenues, así
+    // que sus compras usan el checkout oficial del club (§50).
+    create: { promoterId: promoter.id, eventId: event.id, clubId: club.id },
     update: {},
   });
 

@@ -1,6 +1,21 @@
 import { prisma } from "./client";
 
 /**
+ * ⚠️  ESTE ARCHIVO CORRE CON EL ROL ADMINISTRATIVO (DIRECT_URL), NO CON nl_app.
+ *
+ * Todo lo de aquí es trabajo de plataforma que cruza inquilinos a propósito:
+ * anonimizar conversaciones caducadas de todos los clubs, cerrar eventos que
+ * ya pasaron, listar qué fuentes toca sincronizar. No hay un club «actual»
+ * que fijar, y forzar uno significaría recorrer los clubs de uno en uno para
+ * una tarea que por definición es global.
+ *
+ * Por eso usa el cliente global sin contexto de RLS, y por eso el cron que lo
+ * ejecuta debe conectarse con DIRECT_URL. Si algún día se llamara desde una
+ * petición de usuario, esto dejaría de ser cierto y habría que replantearlo.
+ */
+
+
+/**
  * Operaciones de plataforma: las que cruzan tenants a propósito.
  *
  * El worker de sincronización y los jobs de retención tienen que mirar todos
@@ -18,13 +33,19 @@ export interface DueSource {
   readonly eventId: string;
   readonly sourceUrl: string | null;
   readonly lastSyncedAt: Date | null;
-  readonly event: { readonly name: string; readonly startsAt: Date };
+  /** `clubId` viaja con el evento: el worker lo necesita para fijar el
+   *  contexto de RLS antes de refrescarlo. Al estar el tipo declarado a mano,
+   *  añadirlo al `select` no bastaba — esta interfaz manda sobre lo que
+   *  Prisma infiere. */
+  readonly event: { readonly name: string; readonly startsAt: Date; readonly clubId: string };
 }
 
 export async function listSyncCandidates(limit = 100): Promise<DueSource[]> {
   return prisma.eventSource.findMany({
     where: { provider: "fourvenues-public", syncStatus: { not: "UNSUPPORTED" } },
-    include: { event: { select: { name: true, startsAt: true } } },
+    // `clubId` viaja para que el worker pueda fijar el contexto de RLS al
+    // refrescar cada evento: sin él tendría que buscarlo, o peor, saltárselo.
+    include: { event: { select: { name: true, startsAt: true, clubId: true } } },
     take: limit,
   });
 }

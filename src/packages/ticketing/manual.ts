@@ -11,7 +11,6 @@
 import { DEFAULT_TTL_SECONDS, EXTRACTION_CONFIDENCE, dataPoint } from "@nightlife/core/provenance";
 import type {
   AvailabilityState,
-  CheckoutOptions,
   EventRef,
   NormalizedEvent,
   NormalizedTicketType,
@@ -54,11 +53,9 @@ export class ManualSource implements TicketingProvider {
     return [this.build()];
   }
 
-  getCheckoutUrl(_ref: EventRef, options?: CheckoutOptions): string | null {
+  getCheckoutUrl(_ref: EventRef): string | null {
     try {
-      const url = new URL(this.input.ticketUrl);
-      if (options?.referralTag) url.searchParams.set("promoter", options.referralTag);
-      return url.toString();
+      return new URL(this.input.ticketUrl).toString();
     } catch {
       return null;
     }

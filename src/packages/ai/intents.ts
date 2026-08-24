@@ -44,14 +44,45 @@ export const PURCHASE_INTENTS: ReadonlySet<Intent> = new Set<Intent>([
   "GUEST_LIST",
 ]);
 
+/**
+ * Abreviaturas de móvil. La gente no escribe "qué" en un DM de Instagram,
+ * escribe "q". Sin esto, "q hay hoy" no casa con ningún patrón de `que` y se
+ * va al LLM —o peor, a OTHER— por una letra.
+ *
+ * Solo se expanden palabras completas: "que" dentro de "queso" se queda.
+ */
+const ABREVIATURAS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/\bq\b/g, "que"],
+  [/\bk\b/g, "que"],
+  [/\bqe\b/g, "que"],
+  [/\bxq\b/g, "porque"],
+  [/\bpq\b/g, "porque"],
+  [/\bxfa\b/g, "por favor"],
+  [/\bpf\b/g, "por favor"],
+  [/\btb\b/g, "tambien"],
+  [/\btmb\b/g, "tambien"],
+  [/\bx\b/g, "por"],
+  [/\bd\b/g, "de"],
+  [/\bpa\b/g, "para"],
+  [/\bdnd\b/g, "donde"],
+  [/\bcuanto?s?\b/g, "cuanto"],
+  [/\bentras\b/g, "entrar"],
+  [/\bu\b/g, "you"],
+  [/\br\b/g, "are"],
+];
+
 export function normalizeText(input: string): string {
-  return input
+  let text = input
     .toLowerCase()
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
     .replace(/[¿?¡!.,;:]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+  for (const [pattern, replacement] of ABREVIATURAS) {
+    text = text.replace(pattern, replacement);
+  }
+  return text.replace(/\s+/g, " ").trim();
 }
 
 interface Rule {
@@ -69,10 +100,14 @@ const RULES: readonly Rule[] = [
   {
     intent: "HUMAN_AGENT",
     patterns: [
-      /\bhablar con (alguien|una persona|un humano|el equipo|rrpp)\b/,
+      /\bhablar con (alguien|una persona|un humano|el equipo|rrpp|reservas)\b/,
       /\bme pas(as|a|ais) con\b/,
       /\bquiero (hablar|contactar) con\b/,
+      /\bnecesito (una persona|hablar|que me atienda)\b/,
       /\batencion (al )?cliente\b/,
+      /\bhay alguien (ahi|que me atienda)\b/,
+      /\b(talk|speak) to (someone|a person|a human|somebody)\b/,
+      /\breal person\b/,
     ],
   },
   {
@@ -91,23 +126,33 @@ const RULES: readonly Rule[] = [
   {
     intent: "TICKET_PRICE",
     patterns: [
-      /\bcuanto (cuesta|vale|es|sale|esta)\b/,
+      /\bcuanto (cuesta|vale|es|sale|esta|cobran|piden)\b/,
       /\bque precio\b/,
-      /\bprecio(s)? (de )?(la )?(entrada|entradas|ticket)\b/,
+      /\bprecio(s)?\b/,
       /\bcuanto (por|la) entrada\b/,
-      /^\s*precio\s*$/,
-      /\bcuanto\b.*\bentrada/,
+      /\bcuanto vale entrar\b/,
+      /\bcuanto\b.*\bentra/,
+      // «cuánto?» a secas, o al final de la frase: «la de MON, cuánto?».
+      // Anclado al final a propósito: así «cuánto tiempo lleváis abiertos»
+      // no se convierte en una pregunta de precio.
+      /\bcuanto\s*$/,
+      /\bhow much\b/,
+      /\bwhat.s the price\b/,
+      /\bprice\b/,
+      /\bcover charge\b/,
     ],
   },
   {
     intent: "TICKET_AVAILABILITY",
     patterns: [
-      /\bquedan (entradas|tickets|plazas)\b/,
-      /\bhay entradas\b/,
+      /\bquedan (entradas|tickets|plazas|sitios)\b/,
+      /\bhay entradas (aun|todavia)?\b/,
       /\bestan agotadas\b/,
       /\bsold ?out\b/,
       /\bentradas en (la )?puerta\b/,
       /\bse puede (comprar|entrar) en (la )?puerta\b/,
+      /\bany tickets (left|available)\b/,
+      /\bstill available\b/,
     ],
   },
   {
@@ -115,15 +160,24 @@ const RULES: readonly Rule[] = [
     patterns: [
       /\b(quiero|queria|quisiera) (comprar|coger|pillar|sacar)\b/,
       /\bdonde (compro|se compra|las compro)\b/,
-      /\bcomo compro\b/,
-      /\blink (de compra|para comprar|de entradas)\b/,
-      /\bpasame el link\b/,
-      /\bmandame el link\b/,
+      /\bcomo (compro|las saco)\b/,
+      /\blink\b/,
+      /\benlace\b/,
+      /\bpasame\b.*\b(link|entradas|tickets|enlace)\b/,
+      /\bmandame\b.*\b(link|entradas|tickets|enlace)\b/,
+      /^\s*entradas\s*$/,
+      /^\s*tickets?\s*$/,
+      /\bbuy (a )?ticket/,
+      /\bwhere (do i|can i) buy\b/,
+      /\bsend me the link\b/,
     ],
   },
   {
     intent: "VIP",
-    patterns: [/\bvip\b/, /\breservado\b/, /\bbotella\b/, /\bmesa(s)?\b/, /\bzona privada\b/],
+    patterns: [
+      /\bvip\b/, /\breservado\b/, /\bbotella\b/, /\bmesa(s)?\b/,
+      /\bzona privada\b/, /\btable(s)?\b/, /\bbottle service\b/,
+    ],
   },
   {
     intent: "TABLE_RESERVATION",
@@ -131,35 +185,85 @@ const RULES: readonly Rule[] = [
   },
   {
     intent: "BIRTHDAY",
-    patterns: [/\bcumple(anos)?\b/, /\bcelebrar\b/, /\bdespedida\b/],
+    patterns: [/\bcumple(anos)?\b/, /\bcelebrar\b/, /\bdespedida\b/, /\bbirthday\b/],
   },
   {
     intent: "GUEST_LIST",
-    patterns: [/\blista\b/, /\bguest ?list\b/, /\bapuntarme\b/, /\bponerme en lista\b/],
+    patterns: [/\blista\b/, /\bguest ?list\b/, /\bapuntarme\b/, /\bponerme en lista\b/, /\bon the list\b/],
   },
   {
     intent: "DJ_INFO",
-    patterns: [/\bquien (pincha|toca|viene)\b/, /\bque dj\b/, /\bcartel\b/, /\bline ?up\b/, /\bartista\b/],
+    patterns: [
+      /\bquien (pincha|toca|viene|esta)\b/,
+      /\bque dj\b/,
+      /\bcartel\b/,
+      /\bline ?up\b/,
+      /\bartista\b/,
+      /\bwho.s (playing|on|djing)\b/,
+    ],
   },
   {
     intent: "AGE_REQUIREMENT",
-    patterns: [/\bedad\b/, /\bmenores\b/, /\bmayores de\b/, /\btengo \d{2} anos\b/, /\bcon \d{2} (anos )?puedo\b/],
+    patterns: [
+      /\bedad\b/,
+      /\bmenores\b/,
+      /\bmayores de\b/,
+      /\btengo \d{2}( anos)?\b/,
+      /\bcon \d{2}\b.*\b(puedo|puede|entrar|entra)\b/,
+      /\b(puedo|puede)\b.*\bcon \d{2}\b/,
+      /\bage (limit|requirement)\b/,
+      /\bhow old\b/,
+      /\bunder ?ages?\b/,
+    ],
   },
   {
     intent: "DRESS_CODE",
-    patterns: [/\bdress ?code\b/, /\bcomo (hay que )?ir vestid/, /\bpuedo ir (con|en)\b/, /\bzapatillas\b/, /\bvestimenta\b/],
+    patterns: [
+      /\bdress ?code\b/,
+      /\bcomo (hay que )?ir vestid/,
+      /\b(puedo|puedes|podemos|se puede) (ir|entrar) (con|en)\b/,
+      /\bzapatillas\b/,
+      /\bdeportivas\b/,
+      /\bchandal\b/,
+      /\bshorts\b/,
+      /\bvestimenta\b/,
+      /\bcan i wear\b/,
+      /\bsneakers\b/,
+    ],
   },
   {
     intent: "OPENING_TIME",
-    patterns: [/\ba que hora (abre|abris|empieza|cierra)\b/, /\bhorario\b/, /\bhasta que hora\b/],
+    patterns: [
+      /\ba que hora (abre|abris|empieza|cierra|cerrais)\b/,
+      /\bhorario\b/,
+      /\bhasta que hora\b/,
+      /\bultima hora (de entrada|para entrar)\b/,
+      /\bwhat time (do you )?(open|close)\b/,
+      /\bopening (time|hours)\b/,
+      /\bhow late\b/,
+    ],
   },
   {
     intent: "LOCATION",
-    patterns: [/\bdonde (esta|estais|queda)\b/, /\bdireccion\b/, /\bcomo llego\b/, /\bubicacion\b/, /\ben que calle\b/],
+    patterns: [
+      /\bdonde (esta|estais|queda|es)\b/,
+      /\bdireccion\b/,
+      /\bcomo (llego|se llega)\b/,
+      /\bubicacion\b/,
+      /\ben que calle\b/,
+      /\bwhere (is|are you)\b/,
+      /\baddress\b/,
+    ],
   },
   {
     intent: "EVENT_DATE",
-    patterns: [/\bque dia\b/, /\bque fecha\b/, /\bcuando es\b/, /\beste (sabado|viernes|jueves|domingo)\b/],
+    patterns: [
+      /\bque dia\b/,
+      /\bque fecha\b/,
+      /\bcuando es\b/,
+      /\bwhat day\b/,
+      /\bwhat date\b/,
+    ],
   },
   {
     intent: "EVENT_TIME",
@@ -167,7 +271,14 @@ const RULES: readonly Rule[] = [
   },
   {
     intent: "EVENT_INFO",
-    patterns: [/\bque (fiesta|evento|hay)\b/, /\bque plan\b/, /\bprograma\b/],
+    patterns: [
+      /\bque (fiesta|evento|hay|tienes|teneis|hacéis|haceis)\b/,
+      /\bque plan\b/,
+      /\bprograma\b/,
+      /\beste (sabado|viernes|jueves|domingo|finde)\b/,
+      /\bwhat.s (on|happening|going on)\b/,
+      /\bany (party|parties|events?)\b/,
+    ],
   },
   {
     intent: "GREETING",

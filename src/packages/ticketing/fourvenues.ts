@@ -23,7 +23,6 @@ import { EXTRACTION_CONFIDENCE } from "@nightlife/core/provenance";
 import { normalizeEvent } from "./normalize";
 import { parseEventPage } from "./parse";
 import type {
-  CheckoutOptions,
   EventRef,
   NormalizedEvent,
   ProviderCapabilities,
@@ -139,19 +138,11 @@ export class FourvenuesPublicSource implements TicketingProvider {
     return events;
   }
 
-  getCheckoutUrl(ref: EventRef, options?: CheckoutOptions): string | null {
+  /** La URL pública del evento, tal cual la publica la fuente. Sin añadidos. */
+  getCheckoutUrl(ref: EventRef): string | null {
     if (!ref.url) return null;
     try {
-      const url = new URL(ref.url);
-      if (options?.referralTag) {
-        // Se escribe y no se lee nunca de vuelta. Es información para la
-        // ticketera del club, no un dato nuestro: no hay nada en la
-        // plataforma que consulte ventas por esta etiqueta.
-        // Si Fourvenues usa otro nombre de parámetro, se cambia aquí y en
-        // ningún otro sitio.
-        url.searchParams.set("promoter", options.referralTag);
-      }
-      return url.toString();
+      return new URL(ref.url).toString();
     } catch {
       return null;
     }

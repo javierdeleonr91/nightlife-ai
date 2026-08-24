@@ -7,3 +7,13 @@ out/
 next-env.d.ts
 coverage/
 .DS_Store
+*.p8
+
+# Secretos y archivos locales
+.env.*
+!.env.example
+
+# Backups y salidas locales
+backups/
+pipeline-ejecucion.log
+RESULTS.txt

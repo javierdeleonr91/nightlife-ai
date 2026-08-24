@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { CheckMark } from "@/components/ui";
 
 interface EventRow {
   id: string;
@@ -9,8 +10,16 @@ interface EventRow {
   clubName: string;
   when: string;
   price: string;
+  imageUrl: string | null;
 }
 
+/**
+ * Selección de eventos del promoter.
+ *
+ * Con flyer y toque grande: se usa con el pulgar. La fila entera es el área
+ * táctil, no una casilla de 16px, y el estado seleccionado se ve por el propio
+ * marco de la tarjeta en vez de por un checkbox del sistema.
+ */
 export function EventSelector({
   events,
   initialSelected,
@@ -21,9 +30,11 @@ export function EventSelector({
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set(initialSelected));
   const [pending, startTransition] = useTransition();
+  const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function toggle(id: string) {
+    setSaved(false);
     setSelected((current) => {
       const next = new Set(current);
       if (next.has(id)) next.delete(id);
@@ -45,44 +56,82 @@ export function EventSelector({
         setError(data?.error?.message ?? "No se ha podido guardar");
         return;
       }
+      setSaved(true);
       router.refresh();
+      setTimeout(() => setSaved(false), 2400);
     });
   }
 
   return (
-    <div className="space-y-4">
-      <ul className="divide-y divide-dash-line overflow-hidden rounded-xl border border-dash-line bg-dash-surface">
-        {events.map((event) => (
-          <li key={event.id}>
-            <label className="flex cursor-pointer items-center gap-3 px-4 py-3">
-              <input
-                type="checkbox"
-                checked={selected.has(event.id)}
-                onChange={() => toggle(event.id)}
-                className="h-5 w-5 shrink-0 accent-[var(--dash-accent)]"
-              />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium">{event.name}</span>
-                <span className="block text-xs text-dash-muted">
-                  {event.clubName} · {event.when}
+    <div className="grid gap-4">
+      <ul className="nl-stagger grid gap-2">
+        {events.map((event) => {
+          const on = selected.has(event.id);
+          return (
+            <li key={event.id}>
+              <button
+                type="button"
+                onClick={() => toggle(event.id)}
+                aria-pressed={on}
+                className="nl-card nl-card--interactive w-full text-left"
+                style={on ? { boxShadow: "var(--nl-glow-hot)" } : undefined}
+              >
+                <span className="flex items-center gap-3 p-3">
+                  <span className="relative h-16 w-16 flex-none overflow-hidden rounded-[var(--nl-r-sm)]">
+                    {event.imageUrl ? (
+                      /* eslint-disable-next-line @next/next/no-img-element -- imagen del club */
+                      <img src={event.imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+                    ) : (
+                      <span className="nl-flyer-fallback">
+                        <span style={{ fontSize: "1.5rem" }}>{event.name.slice(0, 2)}</span>
+                      </span>
+                    )}
+                  </span>
+
+                  <span className="min-w-0 flex-1">
+                    <span className="nl-eyebrow block" style={{ color: "var(--nl-hot-ink)" }}>
+                      {event.when}
+                    </span>
+                    <span className="mt-0.5 block truncate font-semibold">{event.name}</span>
+                    <span className="nl-dim block truncate text-[0.8125rem]">{event.clubName}</span>
+                  </span>
+
+                  <span className="flex flex-none items-center gap-3">
+                    <span className="nl-num text-[0.875rem]">{event.price}</span>
+                    <span
+                      className="grid h-6 w-6 place-items-center rounded-full"
+                      style={{
+                        background: on ? "var(--nl-hot)" : "var(--nl-surface-3)",
+                        color: "#fff",
+                      }}
+                      aria-hidden="true"
+                    >
+                      {on ? <CheckMark size={14} /> : null}
+                    </span>
+                  </span>
                 </span>
-              </span>
-              <span className="shrink-0 text-sm font-bold tabular-nums">{event.price}</span>
-            </label>
-          </li>
-        ))}
+              </button>
+            </li>
+          );
+        })}
       </ul>
 
-      {error ? <p className="text-sm text-rose-500">{error}</p> : null}
+      {error ? <p className="nl-error">{error}</p> : null}
 
-      <button
-        type="button"
-        onClick={save}
-        disabled={pending}
-        className="w-full rounded-lg bg-dash-accent px-4 py-3 text-sm font-bold text-white disabled:opacity-50"
-      >
-        {pending ? "Guardando…" : `Guardar (${selected.size})`}
-      </button>
+      {/* Barra fija: la selección se guarda sin tener que buscar el botón
+          al final de una lista larga. */}
+      <div className="sticky bottom-[104px] lg:bottom-6">
+        <button
+          type="button"
+          onClick={save}
+          disabled={pending}
+          className="nl-btn nl-btn--hot nl-btn--block nl-btn--lg"
+          aria-live="polite"
+        >
+          {pending ? <span className="nl-spinner" /> : saved ? <CheckMark size={19} /> : null}
+          {pending ? "Guardando" : saved ? "Guardado" : `Guardar (${selected.size})`}
+        </button>
+      </div>
     </div>
   );
 }

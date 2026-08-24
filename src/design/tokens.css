@@ -1,0 +1,120 @@
+/*
+ * AFTER DARK — design system de Nightlife Automatico
+ *
+ * La decisión que define todo lo demás: **la elevación se construye con luz,
+ * no con líneas**. Un panel lleno de bordes de 1px lee como software de
+ * administración; un club bien montado se lee por capas de negro y por dónde
+ * cae la luz. Aquí las superficies se separan por valor y por glow, y las
+ * hairlines solo aparecen donde de verdad hacen falta.
+ *
+ * Compromiso deliberado con el modo oscuro. No es "dark mode" como opción:
+ * es el único mundo visual del panel. Un producto para gente que trabaja de
+ * noche, mirado desde la cabina o desde la puerta, no debería quemar la vista.
+ * Las páginas públicas son otra cosa: las pinta el branding de cada club.
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* ── Fondos ───────────────────────────────────────────────────────
+     Negro con matiz violeta, no gris azulado. El gris azulado es el
+     color por defecto de todo el software; el violeta profundo tira
+     hacia la sala. */
+  --nl-void: #07060a;
+  --nl-base: #0b0a10;
+  --nl-surface-1: #131119;
+  --nl-surface-2: #1b1823;
+  --nl-surface-3: #262130;
+
+  /* Hairlines: uso excepcional. Si necesitas muchas, la jerarquía está mal. */
+  --nl-line: rgba(255, 255, 255, 0.055);
+  --nl-line-strong: rgba(255, 255, 255, 0.11);
+
+  /* ── Texto ────────────────────────────────────────────────────────
+     Blanco cálido, nunca #FFF puro: sobre negro profundo el blanco puro
+     vibra y cansa. */
+  --nl-text: #f5f2f8;
+  --nl-text-2: #b3aac2;
+  --nl-text-3: #7a7290;
+  --nl-text-4: #6b6482; /* 3,14:1 sobre surface-2: legible como placeholder */
+
+  /* ── Acentos ──────────────────────────────────────────────────────
+     Un solo protagonista: el rosa. El violeta es soporte y nunca compite.
+     Todo lo demás es semántico. */
+  --nl-hot: #ff2d6f;
+  /* Tinta sobre el acento. Oscura, no blanca: 5,50:1 frente a 3,59:1.
+     Cumple la WCAG y además queda más nightlife que el blanco. */
+  --nl-hot-fg: var(--nl-void);
+  --nl-hot-lift: #ff4680; /* hover del acento */
+  --nl-hot-soft: rgba(255, 45, 111, 0.14);
+  --nl-hot-ink: #ff7ba6;
+  --nl-violet: #7b5cff;
+  --nl-violet-ink: #a68fff;
+  --nl-violet-soft: rgba(123, 92, 255, 0.14);
+
+  --nl-live: #3ddc97;
+  --nl-live-soft: rgba(61, 220, 151, 0.13);
+  --nl-warn: #ffb020;
+  --nl-warn-soft: rgba(255, 176, 32, 0.13);
+  --nl-crit: #ff5c5c;
+  --nl-crit-soft: rgba(255, 92, 92, 0.13);
+
+  /* ── Luz ──────────────────────────────────────────────────────────
+     Sombras muy difusas y muy oscuras: sobre negro, una sombra suave
+     separa mejor que un borde. */
+  --nl-lift-1: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px -14px rgba(0, 0, 0, 0.9);
+  --nl-lift-2: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 20px 48px -24px rgba(0, 0, 0, 0.95);
+  --nl-lift-3: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 32px 80px -32px rgba(0, 0, 0, 1);
+  --nl-glow-hot: 0 0 0 1px rgba(255, 45, 111, 0.28), 0 10px 40px -14px rgba(255, 45, 111, 0.5);
+  --nl-glow-live: 0 0 0 1px rgba(61, 220, 151, 0.25), 0 8px 32px -14px rgba(61, 220, 151, 0.35);
+  --nl-ring: 0 0 0 2px var(--nl-base), 0 0 0 4px var(--nl-hot);
+
+  /* Marcas de terceros.
+     No son nuestra paleta ni se pueden cambiar: Google y Apple fijan estos
+     valores en sus normas de marca para los botones de acceso. Viven aquí
+     porque el color literal solo puede estar en este archivo, y con nombre
+     propio para que nadie los confunda con tokens del producto. */
+  --nl-brand-google-bg: #ffffff;
+  --nl-brand-google-fg: #1f1f1f;
+  --nl-brand-apple-bg: #000000;
+  --nl-brand-apple-fg: #ffffff;
+
+  /* ── Tipografía ───────────────────────────────────────────────────
+     Archivo variable en ancho expandido para titulares: es lo que hace
+     que un encabezado parezca cartel y no etiqueta de formulario.
+     Instrument Sans para interfaz, Martian Mono solo para cifras. */
+  --nl-display: var(--font-display), "Archivo", system-ui, sans-serif;
+  --nl-ui: var(--font-ui), system-ui, -apple-system, sans-serif;
+  --nl-mono: var(--font-mono), ui-monospace, "SF Mono", monospace;
+
+  --nl-t-xs: 0.6875rem;  /* 11 — etiquetas en versal */
+  --nl-t-sm: 0.8125rem;  /* 13 */
+  --nl-t-base: 0.9375rem;/* 15 — cuerpo de interfaz */
+  --nl-t-md: 1.0625rem;  /* 17 */
+  --nl-t-lg: 1.375rem;   /* 22 */
+  --nl-t-xl: 1.875rem;   /* 30 */
+  --nl-t-2xl: 2.5rem;    /* 40 */
+  --nl-t-3xl: 3.5rem;    /* 56 */
+
+  /* ── Espacio y forma ──────────────────────────────────────────────
+     Radios generosos pero no pastilla en todo: la pastilla universal es
+     otro tic de dashboard. Pastilla solo en badges y controles pequeños. */
+  --nl-r-sm: 10px;
+  --nl-r-md: 16px;
+  --nl-r-lg: 22px;
+  --nl-r-xl: 28px;
+  --nl-r-pill: 999px;
+
+  /* ── Movimiento ───────────────────────────────────────────────────
+     Una sola curva para casi todo. La consistencia del easing es lo que
+     hace que una interfaz se sienta de una pieza. */
+  --nl-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --nl-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --nl-fast: 130ms;
+  --nl-mid: 260ms;
+  --nl-slow: 480ms;
+
+  /* Grano. Sutil, pero es lo que quita el plano digital al negro.
+     SVG inline como data URI: sin peticiones, sin imagen que cargar. */
+  --nl-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+}

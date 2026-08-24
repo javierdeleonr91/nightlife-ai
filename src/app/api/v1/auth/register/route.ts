@@ -24,7 +24,15 @@ export async function POST(request: Request) {
     if (existing) throw new AppError("CONFLICT", "No se ha podido crear la cuenta con esos datos");
 
     const user = await prisma.user.create({
-      data: { email, name: body.name.trim(), passwordHash: await hashPassword(body.password) },
+      data: {
+        email,
+        name: body.name.trim(),
+        // La contraseña vive aquí y solo aquí. `UserIdentity` guarda las
+        // identidades externas (Google, Apple); meter también la contraseña
+        // obligaría a un backfill de todas las cuentas que ya existen y dejaría
+        // dos sitios donde mirar para saber lo mismo.
+        passwordHash: await hashPassword(body.password),
+      },
     });
 
     await createSession({ id: user.id, email: user.email });

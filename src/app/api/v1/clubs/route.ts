@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { NextResponse } from "next/server";
 import { AppError } from "@nightlife/core/errors";
+import { needsName } from "@nightlife/core/oauth";
 import { slugify, validateSlug, suggestSlugs } from "@nightlife/core/slug";
 import { startTrial, unsafePrismaForMigrationsOnly as prisma } from "@nightlife/db";
 import { env } from "@nightlife/config/env";
@@ -87,6 +88,23 @@ export async function POST(request: Request) {
           },
         });
       }
+      /*
+       * §6: el rol se guarda una vez y no se vuelve a preguntar.
+       *
+       * Si la cuenta llegó sin nombre (Apple), se usa el del club. Es mejor que
+       * dejarlo vacío y muchísimo mejor que deducirlo del email.
+       */
+      const account = await tx.user.findUnique({
+        where: { id: principal.userId },
+        select: { name: true },
+      });
+      await tx.user.update({
+        where: { id: principal.userId },
+        data: {
+          accountType: "CLUB",
+          ...(needsName({ name: account?.name ?? null }) ? { name: created.name } : {}),
+        },
+      });
       await tx.auditLog.create({
         data: { actorId: principal.userId, clubId: created.id, action: "club.create" },
       });

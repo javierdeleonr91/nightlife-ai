@@ -1,0 +1,1268 @@
+/*
+ * Componentes del design system.
+ *
+ * Clases propias en lugar de sopa de utilidades: un `.nl-card` que cambia en
+ * un sitio vale más que el mismo montón de utilidades repetido en veinte
+ * archivos. Tailwind se queda para layout (grid, flex, gap), que es donde
+ * las utilidades sí ganan.
+ *
+ * Todas las animaciones se apagan con prefers-reduced-motion al final.
+ */
+
+/* ── Base ───────────────────────────────────────────────────────── */
+
+.nl-app {
+  background:
+    radial-gradient(120% 80% at 85% -10%, rgba(255, 45, 111, 0.09), transparent 60%),
+    radial-gradient(90% 70% at 5% 0%, rgba(123, 92, 255, 0.08), transparent 55%),
+    var(--nl-base);
+  color: var(--nl-text);
+  font-family: var(--nl-ui);
+  font-size: var(--nl-t-base);
+  line-height: 1.55;
+  min-height: 100dvh;
+  position: relative;
+}
+
+/* El grano va en un pseudo-elemento fijo: no interfiere con el scroll ni
+   con los eventos de puntero. */
+.nl-app::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image: var(--nl-grain);
+  opacity: 0.028;
+  pointer-events: none;
+  z-index: 0;
+  mix-blend-mode: overlay;
+}
+
+.nl-app > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Tipografía ─────────────────────────────────────────────────── */
+
+.nl-display {
+  font-family: var(--nl-display);
+  font-weight: 800;
+  font-stretch: 118%; /* el ancho expandido es lo que da el aire de cartel */
+  letter-spacing: -0.022em;
+  line-height: 1.02;
+  text-wrap: balance;
+  text-transform: uppercase;
+}
+
+.nl-h1 { font-size: clamp(2rem, 7vw, var(--nl-t-3xl)); }
+.nl-h2 { font-size: clamp(1.5rem, 5vw, var(--nl-t-2xl)); }
+.nl-h3 {
+  font-family: var(--nl-display);
+  font-weight: 700;
+  font-stretch: 108%;
+  font-size: var(--nl-t-lg);
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+}
+
+/* Etiqueta en versal: el recurso que estructura sin dibujar una línea. */
+.nl-eyebrow {
+  font-family: var(--nl-ui);
+  font-size: var(--nl-t-xs);
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--nl-text-3);
+}
+
+.nl-num {
+  font-family: var(--nl-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+}
+
+.nl-muted { color: var(--nl-text-2); }
+.nl-dim { color: var(--nl-text-3); }
+
+/* ── Superficies ────────────────────────────────────────────────── */
+
+.nl-card {
+  background: var(--nl-surface-1);
+  border-radius: var(--nl-r-lg);
+  box-shadow: var(--nl-lift-1);
+  overflow: hidden;
+  position: relative;
+  transition:
+    transform var(--nl-mid) var(--nl-ease),
+    box-shadow var(--nl-mid) var(--nl-ease),
+    background var(--nl-mid) var(--nl-ease);
+}
+
+.nl-card--flat { box-shadow: none; background: var(--nl-surface-1); }
+
+.nl-card--interactive { cursor: pointer; }
+.nl-card--interactive:hover,
+.nl-card--interactive:focus-visible {
+  transform: translateY(-3px);
+  box-shadow: var(--nl-lift-2);
+  background: var(--nl-surface-2);
+}
+.nl-card--interactive:active { transform: translateY(-1px); }
+
+.nl-panel {
+  background: var(--nl-surface-1);
+  border-radius: var(--nl-r-lg);
+  padding: 20px;
+}
+
+/* ── Botones ────────────────────────────────────────────────────── */
+
+.nl-btn {
+  --btn-bg: var(--nl-surface-2);
+  --btn-fg: var(--nl-text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--nl-ui);
+  font-size: var(--nl-t-base);
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  padding: 12px 20px;
+  min-height: 46px; /* objetivo táctil cómodo con el móvil en una mano */
+  border: 0;
+  border-radius: var(--nl-r-md);
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    transform var(--nl-fast) var(--nl-ease),
+    box-shadow var(--nl-mid) var(--nl-ease),
+    background var(--nl-fast) var(--nl-ease),
+    opacity var(--nl-fast) linear;
+}
+
+.nl-btn:active:not(:disabled) { transform: scale(0.975); }
+.nl-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.nl-btn--hot {
+  --btn-bg: var(--nl-hot);
+  --btn-fg: var(--nl-hot-fg);
+  box-shadow: 0 8px 28px -12px rgba(255, 45, 111, 0.75);
+}
+.nl-btn--hot:hover:not(:disabled) {
+  --btn-bg: var(--nl-hot-lift);
+  box-shadow: 0 12px 36px -12px rgba(255, 45, 111, 0.9);
+}
+
+.nl-btn--ghost { --btn-bg: transparent; --btn-fg: var(--nl-text-2); }
+.nl-btn--ghost:hover:not(:disabled) { --btn-bg: var(--nl-surface-2); --btn-fg: var(--nl-text); }
+
+.nl-btn--quiet { --btn-bg: var(--nl-surface-2); }
+.nl-btn--quiet:hover:not(:disabled) { --btn-bg: var(--nl-surface-3); }
+
+.nl-btn--lg { min-height: 56px; padding: 16px 28px; font-size: var(--nl-t-md); }
+.nl-btn--block { width: 100%; }
+
+/* ── Badges ─────────────────────────────────────────────────────── */
+
+.nl-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--nl-t-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 5px 10px;
+  border-radius: var(--nl-r-pill);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--nl-text-2);
+  white-space: nowrap;
+}
+
+.nl-badge--live { background: var(--nl-live-soft); color: var(--nl-live); }
+.nl-badge--hot { background: var(--nl-hot-soft); color: var(--nl-hot-ink); }
+.nl-badge--warn { background: var(--nl-warn-soft); color: var(--nl-warn); }
+.nl-badge--crit { background: var(--nl-crit-soft); color: var(--nl-crit); }
+.nl-badge--violet { background: var(--nl-violet-soft); color: var(--nl-violet-ink); }
+
+/* Punto que respira: el estado se lee de reojo, sin tener que leerlo. */
+.nl-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+.nl-dot--pulse { animation: nl-pulse 2.4s var(--nl-ease) infinite; }
+
+@keyframes nl-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 currentColor; }
+  50% { opacity: 0.65; box-shadow: 0 0 0 4px rgba(255, 255, 255, 0); }
+}
+
+/* ── Precio ─────────────────────────────────────────────────────── */
+
+.nl-price {
+  font-family: var(--nl-display);
+  font-weight: 800;
+  font-stretch: 112%;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+.nl-price--xl { font-size: var(--nl-t-2xl); }
+.nl-price--lg { font-size: var(--nl-t-xl); }
+.nl-price--md { font-size: var(--nl-t-lg); }
+
+.nl-price-was {
+  font-family: var(--nl-mono);
+  font-size: var(--nl-t-sm);
+  color: var(--nl-text-4);
+  text-decoration: line-through;
+}
+
+/* ── Formularios ────────────────────────────────────────────────── */
+
+.nl-field { display: flex; flex-direction: column; gap: 8px; }
+
+.nl-label {
+  font-size: var(--nl-t-sm);
+  font-weight: 600;
+  color: var(--nl-text-2);
+}
+
+/* Input relleno, sin borde: el borde de 1px es la firma del formulario
+   corporativo. El foco se marca con luz. */
+.nl-input {
+  width: 100%;
+  font-family: var(--nl-ui);
+  font-size: var(--nl-t-base);
+  color: var(--nl-text);
+  background: var(--nl-surface-2);
+  border: 0;
+  border-radius: var(--nl-r-md);
+  padding: 14px 16px;
+  min-height: 50px;
+  transition: background var(--nl-fast) var(--nl-ease), box-shadow var(--nl-fast) var(--nl-ease);
+}
+.nl-input::placeholder { color: var(--nl-text-4); }
+.nl-input:hover { background: var(--nl-surface-3); }
+.nl-input:focus {
+  outline: none;
+  background: var(--nl-surface-3);
+  box-shadow: 0 0 0 2px rgba(255, 45, 111, 0.55);
+}
+.nl-input--mono { font-family: var(--nl-mono); font-size: var(--nl-t-sm); }
+
+.nl-hint { font-size: var(--nl-t-sm); color: var(--nl-text-3); }
+.nl-error { font-size: var(--nl-t-sm); color: var(--nl-crit); }
+
+/* Foco visible en todo lo enfocable. No negociable: mucha de esta gente
+   navega con el móvil en una mano y prisa. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: none;
+  box-shadow: var(--nl-ring);
+  border-radius: var(--nl-r-sm);
+}
+
+/* ── Modal ──────────────────────────────────────────────────────── */
+
+.nl-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 4, 8, 0.72);
+  backdrop-filter: blur(14px) saturate(120%);
+  -webkit-backdrop-filter: blur(14px) saturate(120%);
+  z-index: 60;
+  animation: nl-fade var(--nl-mid) var(--nl-ease);
+  display: grid;
+  place-items: end center;
+}
+@media (min-width: 640px) { .nl-scrim { place-items: center; } }
+
+.nl-modal {
+  width: min(560px, 100%);
+  max-height: 92dvh;
+  overflow-y: auto;
+  background: var(--nl-surface-1);
+  border-radius: var(--nl-r-xl) var(--nl-r-xl) 0 0;
+  box-shadow: var(--nl-lift-3);
+  /* En móvil sube desde abajo como una hoja; en escritorio aparece
+     centrada. Es el gesto que la gente ya conoce en cada uno. */
+  animation: nl-sheet-in var(--nl-slow) var(--nl-ease-out);
+}
+@media (min-width: 640px) {
+  .nl-modal {
+    border-radius: var(--nl-r-xl);
+    animation: nl-modal-in var(--nl-mid) var(--nl-ease-out);
+  }
+}
+
+.nl-modal__grab {
+  width: 36px;
+  height: 4px;
+  border-radius: var(--nl-r-pill);
+  background: var(--nl-line-strong);
+  margin: 10px auto 0;
+}
+@media (min-width: 640px) { .nl-modal__grab { display: none; } }
+
+@keyframes nl-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes nl-sheet-in {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes nl-modal-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ── Carga ──────────────────────────────────────────────────────── */
+
+.nl-skeleton {
+  background: linear-gradient(
+    100deg,
+    var(--nl-surface-2) 20%,
+    var(--nl-surface-3) 40%,
+    var(--nl-surface-2) 60%
+  );
+  background-size: 220% 100%;
+  border-radius: var(--nl-r-md);
+  animation: nl-shimmer 1.6s linear infinite;
+}
+@keyframes nl-shimmer {
+  from { background-position: 180% 0; }
+  to { background-position: -60% 0; }
+}
+
+/* Etapas del import: cada línea pasa de pendiente a hecha con su check.
+   Es lo que convierte una espera en una secuencia que se entiende. */
+.nl-stage {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 0;
+  color: var(--nl-text-4);
+  transition: color var(--nl-mid) var(--nl-ease);
+}
+.nl-stage--active { color: var(--nl-text); }
+.nl-stage--done { color: var(--nl-text-2); }
+
+.nl-stage__mark {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+  background: var(--nl-surface-2);
+  font-size: 11px;
+  transition: background var(--nl-mid) var(--nl-ease), color var(--nl-mid) var(--nl-ease);
+}
+.nl-stage--active .nl-stage__mark {
+  background: var(--nl-hot-soft);
+  color: var(--nl-hot-ink);
+}
+.nl-stage--done .nl-stage__mark {
+  background: var(--nl-live-soft);
+  color: var(--nl-live);
+}
+
+.nl-spinner {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  animation: nl-spin 700ms linear infinite;
+}
+@keyframes nl-spin { to { transform: rotate(360deg); } }
+
+.nl-progress {
+  height: 3px;
+  border-radius: var(--nl-r-pill);
+  background: var(--nl-surface-2);
+  overflow: hidden;
+}
+.nl-progress__bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--nl-violet), var(--nl-hot));
+  border-radius: inherit;
+  transition: width var(--nl-slow) var(--nl-ease-out);
+}
+
+/* ── Éxito ──────────────────────────────────────────────────────── */
+
+.nl-success__ring {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  margin: 0 auto;
+  background: var(--nl-live-soft);
+  color: var(--nl-live);
+  animation: nl-pop var(--nl-slow) var(--nl-ease-out) both;
+}
+@keyframes nl-pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.nl-check path {
+  stroke-dasharray: 30;
+  stroke-dashoffset: 30;
+  animation: nl-draw 420ms var(--nl-ease-out) 180ms both;
+}
+@keyframes nl-draw { to { stroke-dashoffset: 0; } }
+
+/* ── Entrada en escena ──────────────────────────────────────────── */
+
+.nl-enter { animation: nl-rise var(--nl-slow) var(--nl-ease-out) both; }
+@keyframes nl-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Escalonado por posición. Sin JS, sin librería de animación: la lista
+   se compone sola al cargar. */
+.nl-stagger > * { animation: nl-rise var(--nl-slow) var(--nl-ease-out) both; }
+.nl-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.nl-stagger > *:nth-child(2) { animation-delay: 55ms; }
+.nl-stagger > *:nth-child(3) { animation-delay: 110ms; }
+.nl-stagger > *:nth-child(4) { animation-delay: 165ms; }
+.nl-stagger > *:nth-child(5) { animation-delay: 220ms; }
+.nl-stagger > *:nth-child(6) { animation-delay: 275ms; }
+.nl-stagger > *:nth-child(n + 7) { animation-delay: 320ms; }
+
+/* ── Tarjeta de evento ──────────────────────────────────────────── */
+
+.nl-event {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.nl-event__flyer {
+  position: relative;
+  aspect-ratio: 4 / 5;
+  background: var(--nl-surface-2);
+  overflow: hidden;
+}
+@media (min-width: 640px) { .nl-event__flyer { aspect-ratio: 3 / 4; } }
+
+.nl-event__flyer img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform var(--nl-slow) var(--nl-ease-out);
+}
+.nl-card--interactive:hover .nl-event__flyer img { transform: scale(1.045); }
+
+/* El degradado sobre el flyer es lo que permite poner texto encima sin
+   una caja de fondo sólido, que es lo que abarata la tarjeta. */
+.nl-event__veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    rgba(7, 6, 10, 0.96) 0%,
+    rgba(7, 6, 10, 0.72) 28%,
+    rgba(7, 6, 10, 0.12) 62%,
+    transparent 100%
+  );
+}
+
+.nl-event__body {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.nl-event__top {
+  position: absolute;
+  inset: 14px 14px auto;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* Flyer ausente: en vez de un hueco gris, un cartel generado con la
+   inicial. Un club sin imagen no debería parecer un error. */
+.nl-flyer-fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(80% 60% at 50% 20%, rgba(255, 45, 111, 0.3), transparent 70%),
+    linear-gradient(160deg, var(--nl-surface-3), var(--nl-surface-1));
+}
+.nl-flyer-fallback span {
+  font-family: var(--nl-display);
+  font-weight: 800;
+  font-stretch: 125%;
+  font-size: clamp(3rem, 18vw, 5rem);
+  color: rgba(255, 255, 255, 0.09);
+  text-transform: uppercase;
+  letter-spacing: -0.04em;
+}
+
+/* ── Navegación ─────────────────────────────────────────────────── */
+
+.nl-nav {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 40;
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  background: rgba(11, 10, 16, 0.82);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+}
+@media (min-width: 900px) {
+  .nl-nav {
+    inset: 0 auto 0 0;
+    width: 236px;
+    flex-direction: column;
+    gap: 2px;
+    padding: 28px 16px;
+    background: rgba(7, 6, 10, 0.55);
+  }
+}
+
+.nl-nav__item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 6px;
+  border-radius: var(--nl-r-md);
+  font-size: var(--nl-t-xs);
+  font-weight: 600;
+  color: var(--nl-text-3);
+  text-decoration: none;
+  transition: color var(--nl-fast) var(--nl-ease), background var(--nl-fast) var(--nl-ease);
+}
+.nl-nav__item:hover { color: var(--nl-text-2); }
+.nl-nav__item[aria-current="page"] { color: var(--nl-text); background: var(--nl-surface-2); }
+
+@media (min-width: 900px) {
+  .nl-nav__item {
+    flex: none;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 11px 14px;
+    font-size: var(--nl-t-base);
+    letter-spacing: -0.005em;
+  }
+}
+
+.nl-shell { padding-bottom: 92px; }
+@media (min-width: 900px) { .nl-shell { padding-bottom: 0; padding-left: 236px; } }
+
+/* ── Empty state ────────────────────────────────────────────────── */
+
+.nl-empty {
+  display: grid;
+  place-items: center;
+  gap: 16px;
+  text-align: center;
+  padding: 56px 24px;
+  border-radius: var(--nl-r-xl);
+  background:
+    radial-gradient(70% 60% at 50% 0%, rgba(255, 45, 111, 0.09), transparent 70%),
+    var(--nl-surface-1);
+}
+
+.nl-empty__glyph {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--nl-r-md);
+  display: grid;
+  place-items: center;
+  background: var(--nl-surface-2);
+  color: var(--nl-hot-ink);
+}
+
+/* ── Pasos de onboarding ────────────────────────────────────────── */
+
+.nl-steps { display: flex; gap: 6px; }
+.nl-step {
+  flex: 1;
+  height: 3px;
+  border-radius: var(--nl-r-pill);
+  background: var(--nl-surface-2);
+  overflow: hidden;
+}
+.nl-step--done { background: var(--nl-hot); }
+.nl-step--current::after {
+  content: "";
+  display: block;
+  height: 100%;
+  width: 45%;
+  background: var(--nl-hot);
+  border-radius: inherit;
+  animation: nl-crawl 1.8s var(--nl-ease) infinite;
+}
+@keyframes nl-crawl {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(240%); }
+}
+
+/* ── Toast ──────────────────────────────────────────────────────── */
+
+.nl-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(104px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border-radius: var(--nl-r-pill);
+  background: var(--nl-surface-3);
+  box-shadow: var(--nl-lift-2);
+  font-size: var(--nl-t-sm);
+  font-weight: 600;
+  animation: nl-toast-in var(--nl-mid) var(--nl-ease-out);
+}
+@media (min-width: 900px) { .nl-toast { bottom: 28px; } }
+@keyframes nl-toast-in {
+  from { opacity: 0; transform: translate(-50%, 14px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* ── Scrollbar ──────────────────────────────────────────────────── */
+
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--nl-surface-3);
+  border-radius: var(--nl-r-pill);
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+/* ── Accesibilidad ──────────────────────────────────────────────── */
+
+.nl-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Quien pide menos movimiento recibe la interfaz entera, sin animación.
+   Nada de "animaciones más lentas": ninguna. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .nl-card--interactive:hover { transform: none; }
+  .nl-card--interactive:hover .nl-event__flyer img { transform: none; }
+}
+
+/* ── Menú de usuario ────────────────────────────────────────────── */
+
+.nl-user-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: var(--nl-r-md);
+  background: transparent;
+  color: var(--nl-text-2);
+  cursor: pointer;
+  font-family: var(--nl-ui);
+  font-size: var(--nl-t-base);
+  font-weight: 600;
+  transition: background var(--nl-fast) var(--nl-ease), color var(--nl-fast) var(--nl-ease);
+}
+.nl-user-trigger:hover { background: var(--nl-surface-2); color: var(--nl-text); }
+.nl-user-trigger:focus-visible { box-shadow: var(--nl-ring); }
+
+/* Nombre y papel se apilan: «Javier De Leon» sobre «Promoter». En pantallas
+   estrechas la lateral se reduce al avatar y el bloque de texto desaparece. */
+.nl-user-trigger__id { display: none; min-width: 0; text-align: left; }
+.nl-user-trigger__name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+.nl-user-trigger__role {
+  display: block;
+  font-size: var(--nl-t-xs);
+  font-weight: 500;
+  color: var(--nl-text-3);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.4;
+}
+.nl-user-trigger__chev {
+  display: none;
+  margin-left: auto;
+  flex: none;
+  color: var(--nl-text-3);
+  transition: transform var(--nl-fast) var(--nl-ease);
+}
+.nl-user-trigger__chev.is-open { transform: rotate(180deg); }
+
+@media (min-width: 900px) {
+  .nl-user-trigger__id,
+  .nl-user-trigger__chev { display: block; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nl-user-trigger__chev { transition: none; }
+}
+
+.nl-avatar {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: linear-gradient(145deg, var(--nl-violet), var(--nl-hot));
+  color: var(--nl-hot-fg);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.nl-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+.nl-menu {
+  position: absolute;
+  z-index: 50;
+  min-width: 232px;
+  padding: 6px;
+  border-radius: var(--nl-r-md);
+  background: var(--nl-surface-2);
+  box-shadow: var(--nl-lift-3);
+  /*
+   * El menú SIEMPRE sube. Esto era un bug real y difícil de ver leyendo código:
+   * en escritorio el disparador vive al final de una barra lateral de altura
+   * completa, así que abrir hacia abajo (`top: 100%`) dejaba el desplegable
+   * fuera de la pantalla. La tarjeta de usuario se veía, el chevron giraba y
+   * «Log out» no existía para el usuario porque estaba pintado por debajo del
+   * borde inferior del navegador.
+   *
+   * En móvil el disparador también está abajo (barra inferior u hoja «More»),
+   * así que subir es correcto en los dos sitios. La única diferencia es a qué
+   * lado se alinea.
+   */
+  inset: auto 0 calc(100% + 8px) auto;
+  animation: nl-rise var(--nl-mid) var(--nl-ease-out);
+}
+@media (min-width: 900px) { .nl-menu { inset: auto auto calc(100% + 8px) 0; } }
+
+.nl-menu__head { padding: 10px 12px 12px; }
+
+.nl-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: var(--nl-r-sm);
+  background: transparent;
+  color: var(--nl-text-2);
+  font-family: var(--nl-ui);
+  font-size: var(--nl-t-base);
+  font-weight: 500;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--nl-fast) var(--nl-ease), color var(--nl-fast) var(--nl-ease);
+}
+.nl-menu__item:hover { background: var(--nl-surface-3); color: var(--nl-text); }
+.nl-menu__item--danger { color: var(--nl-crit); }
+.nl-menu__item--danger:hover { background: var(--nl-crit-soft); color: var(--nl-crit); }
+
+.nl-menu__sep {
+  height: 1px;
+  margin: 6px 12px;
+  background: var(--nl-line);
+}
+
+/* ── Volver y breadcrumbs ───────────────────────────────────────── */
+
+.nl-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px 8px 8px;
+  margin-left: -8px;
+  border-radius: var(--nl-r-md);
+  color: var(--nl-text-2);
+  font-size: var(--nl-t-base);
+  font-weight: 500;
+  text-decoration: none;
+  transition: background var(--nl-fast) var(--nl-ease), color var(--nl-fast) var(--nl-ease);
+}
+.nl-back:hover { background: var(--nl-surface-2); color: var(--nl-text); }
+
+/* Las migas ayudan en escritorio y solo estorban en móvil, donde ya está
+   el botón de volver. */
+.nl-crumbs { display: none; }
+@media (min-width: 900px) {
+  .nl-crumbs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--nl-t-sm);
+    color: var(--nl-text-3);
+  }
+  .nl-crumbs a { color: var(--nl-text-3); text-decoration: none; }
+  .nl-crumbs a:hover { color: var(--nl-text-2); }
+  .nl-crumbs span[aria-current] { color: var(--nl-text-2); }
+}
+
+/* ── Hoja "Más" ─────────────────────────────────────────────────── */
+
+.nl-sheet {
+  width: 100%;
+  max-height: 82dvh;
+  overflow-y: auto;
+  padding: 0 12px calc(20px + env(safe-area-inset-bottom));
+  background: var(--nl-surface-1);
+  border-radius: var(--nl-r-xl) var(--nl-r-xl) 0 0;
+  box-shadow: var(--nl-lift-3);
+  animation: nl-sheet-in var(--nl-slow) var(--nl-ease-out);
+}
+
+.nl-sheet__item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 15px 12px;
+  border-radius: var(--nl-r-md);
+  color: var(--nl-text);
+  font-size: var(--nl-t-md);
+  font-weight: 500;
+  text-decoration: none;
+}
+.nl-sheet__item:active { background: var(--nl-surface-2); }
+.nl-sheet__item svg { color: var(--nl-text-3); flex: none; }
+
+/* ── Integraciones ──────────────────────────────────────────────── */
+
+.nl-integration {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  border-radius: var(--nl-r-lg);
+  background: var(--nl-surface-1);
+  box-shadow: var(--nl-lift-1);
+}
+.nl-integration__logo {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: var(--nl-r-sm);
+  display: grid;
+  place-items: center;
+  background: var(--nl-surface-2);
+  color: var(--nl-text-2);
+}
+
+/* ─────────────────────────────────────────────────── avisos (§40)
+   Abajo en móvil, abajo a la derecha en escritorio. Nunca tapan el pulgar ni
+   la acción principal. El éxito se va solo; el error se queda hasta que se
+   cierra, porque un error que desaparece antes de leerlo no sirve de nada. */
+
+.nl-toasts {
+  position: fixed;
+  z-index: 90;
+  left: 1rem;
+  right: 1rem;
+  bottom: calc(var(--nl-nav-h, 4.5rem) + 1rem);
+  display: grid;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+@media (min-width: 1024px) {
+  .nl-toasts {
+    left: auto;
+    right: 1.5rem;
+    bottom: 1.5rem;
+    width: min(24rem, calc(100vw - 3rem));
+  }
+}
+
+.nl-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.8rem 0.9rem;
+  border-radius: var(--nl-r-md);
+  background: var(--nl-surface-2);
+  color: var(--nl-text);
+  font-size: var(--nl-t-sm);
+  box-shadow: var(--nl-lift-3);
+  animation: nl-toast-in var(--nl-fast) var(--nl-ease) both;
+}
+
+@keyframes nl-toast-in {
+  from { opacity: 0; transform: translateY(0.5rem) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nl-toast { animation: none; }
+}
+
+.nl-toast__mark {
+  display: grid;
+  place-items: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  flex: none;
+  border-radius: 999px;
+}
+
+.nl-toast--ok .nl-toast__mark { background: var(--nl-live-soft); color: var(--nl-live); }
+.nl-toast--error .nl-toast__mark { background: var(--nl-crit-soft); color: var(--nl-crit); }
+.nl-toast--info .nl-toast__mark { background: var(--nl-hot-soft); color: var(--nl-hot-ink); }
+
+.nl-toast__close {
+  flex: none;
+  color: var(--nl-text-3);
+  padding: 0.15rem;
+  border-radius: var(--nl-r-sm);
+  transition: color var(--nl-fast) var(--nl-ease);
+}
+
+.nl-toast__close:hover { color: var(--nl-text); }
+.nl-toast__close:focus-visible { box-shadow: var(--nl-ring); }
+
+/* ─────────────────────────────────────── subida de imágenes (§8, §9)
+   El avatar es un círculo y la portada una banda 3:1: la forma del control es
+   la forma del resultado, así que nadie tiene que imaginarse cómo va a quedar. */
+
+.nl-upload-avatar {
+  position: relative;
+  width: 88px;
+  height: 88px;
+  flex: none;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(145deg, var(--nl-violet), var(--nl-hot));
+  box-shadow: var(--nl-lift-1);
+}
+
+.nl-upload-avatar__initials {
+  font-family: var(--nl-display);
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--nl-hot-fg);
+  letter-spacing: 0.02em;
+}
+
+.nl-upload-cover {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 1;
+  border-radius: var(--nl-r-md);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: var(--nl-surface-2);
+}
+
+.nl-upload-cover__empty {
+  display: grid;
+  justify-items: center;
+  gap: 0.4rem;
+  color: var(--nl-text-3);
+  font-size: var(--nl-t-sm);
+}
+
+.nl-upload__veil {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  gap: 0.5rem;
+  grid-auto-flow: row;
+  background: rgba(6, 5, 10, 0.72);
+  color: var(--nl-text);
+  font-size: var(--nl-t-sm);
+  backdrop-filter: blur(2px);
+}
+
+/* ───────────────────────────────────── perfil público (§10, §52)
+   Portada a sangre, avatar montado encima del borde y el nombre en grande.
+   La diferencia entre «una página de texto» y «un escaparate» es esta banda. */
+
+.nl-hero {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--nl-surface-1);
+}
+
+@media (min-width: 640px) {
+  .nl-hero { aspect-ratio: 3 / 1; }
+}
+
+.nl-hero__veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, var(--nl-base) 2%, transparent 62%);
+}
+
+.nl-hero__glow {
+  position: absolute;
+  inset: 0;
+  opacity: 0.85;
+}
+
+.nl-hero-avatar {
+  position: relative;
+  width: 104px;
+  height: 104px;
+  margin-top: -52px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(145deg, var(--nl-violet), var(--nl-hot));
+  font-family: var(--nl-display);
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--nl-hot-fg);
+}
+
+.nl-social {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 999px;
+  background: var(--nl-surface-2);
+  color: var(--nl-text-2);
+  font-size: var(--nl-t-sm);
+  font-weight: 600;
+  transition: background var(--nl-fast) var(--nl-ease), color var(--nl-fast) var(--nl-ease);
+}
+
+.nl-social:hover { background: var(--nl-surface-3); color: var(--nl-text); }
+.nl-social:focus-visible { box-shadow: var(--nl-ring); }
+
+/* ───────────────────────────────────── progreso de perfil (§21) */
+
+.nl-meter {
+  height: 6px;
+  width: 100%;
+  border-radius: 999px;
+  background: var(--nl-surface-3);
+  overflow: hidden;
+}
+
+.nl-meter__fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--nl-violet), var(--nl-hot));
+  transition: width var(--nl-slow) var(--nl-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nl-meter__fill { transition: none; }
+}
+
+.nl-todo {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.6rem 0.15rem;
+  color: var(--nl-text-2);
+  font-size: var(--nl-t-sm);
+}
+
+.nl-todo:hover { color: var(--nl-text); }
+
+.nl-todo__box {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex: none;
+  border-radius: 0.35rem;
+  background: var(--nl-surface-3);
+  display: grid;
+  place-items: center;
+  color: var(--nl-live);
+}
+
+/* ─────────────────────────────────────────────── interruptores (§6) */
+
+.nl-switch {
+  position: relative;
+  width: 46px;
+  height: 27px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--nl-surface-3);
+  transition: background var(--nl-fast) var(--nl-ease);
+  cursor: pointer;
+}
+
+.nl-switch.is-on { background: var(--nl-hot); }
+.nl-switch:disabled { opacity: 0.4; cursor: not-allowed; }
+.nl-switch:focus-visible { box-shadow: var(--nl-ring); }
+
+.nl-switch__dot {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  background: var(--nl-text);
+  transition: transform var(--nl-fast) var(--nl-ease);
+}
+
+.nl-switch.is-on .nl-switch__dot {
+  transform: translateX(19px);
+  background: var(--nl-hot-fg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nl-switch, .nl-switch__dot { transition: none; }
+}
+
+/* ────────────────────────────────── acceso con proveedor
+   Altura de 52px: por encima del mínimo táctil de 44 y suficiente para que en
+   un móvil se pulse sin pensar. El de Apple es negro con el logotipo en blanco
+   porque así lo exigen sus normas de marca, no por gusto. */
+
+.nl-provider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 1.1rem;
+  border-radius: var(--nl-r-md);
+  background: var(--nl-brand-google-bg);
+  color: var(--nl-brand-google-fg);
+  font-family: var(--nl-ui);
+  font-size: 1rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: transform var(--nl-fast) var(--nl-ease), filter var(--nl-fast) var(--nl-ease);
+}
+
+.nl-provider:hover { filter: brightness(0.94); }
+.nl-provider:active { transform: scale(0.99); }
+.nl-provider:focus-visible { box-shadow: var(--nl-ring); }
+
+.nl-provider--apple { background: var(--nl-brand-apple-bg); color: var(--nl-brand-apple-fg); }
+.nl-provider--apple:hover { filter: brightness(1.35); }
+
+.nl-provider--off {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.nl-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  color: var(--nl-text-3);
+  font-size: var(--nl-t-sm);
+}
+
+.nl-divider::before,
+.nl-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--nl-surface-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nl-provider { transition: none; }
+}
+
+/* Selector de idioma: dos botones pegados, sin desplegable. Son dos opciones. */
+.nl-lang {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--nl-surface-2);
+}
+
+.nl-lang__option {
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  color: var(--nl-text-3);
+  font-size: var(--nl-t-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: background var(--nl-fast) var(--nl-ease), color var(--nl-fast) var(--nl-ease);
+}
+
+.nl-lang__option[aria-current="true"] {
+  background: var(--nl-surface-3);
+  color: var(--nl-text);
+}
+
+.nl-lang__option:focus-visible { box-shadow: var(--nl-ring); }
+
+/* ── Chips de selección ─────────────────────────────────────────── */
+/* Un grupo pequeño de opciones excluyentes donde un <select> nativo sería
+   peor en móvil: se ven las cuatro a la vez y se tocan con el pulgar. */
+
+.nl-chip {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: var(--nl-r-pill);
+  background: var(--nl-surface-2);
+  color: var(--nl-text-2);
+  font-size: var(--nl-t-sm);
+  font-weight: 550;
+  transition: background var(--nl-fast) var(--nl-ease),
+              color var(--nl-fast) var(--nl-ease);
+}
+.nl-chip:hover { background: var(--nl-surface-3); color: var(--nl-text); }
+.nl-chip--on {
+  background: var(--nl-text);
+  color: var(--nl-void);
+}

@@ -1,11 +1,13 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { unsafePrismaForMigrationsOnly as prisma } from "@nightlife/db";
 import { getPrincipal } from "@/lib/session";
+import { ButtonLink } from "@/components/ui";
 
 /**
  * Raíz. No es una landing de marketing: reparte a la gente hacia donde
- * trabaja. Un club entra a su panel, un promoter al suyo.
+ * trabaja. Un club entra a su panel, un promoter al suyo. Solo quien no ha
+ * entrado nunca ve esta pantalla, y para esa persona lo único que importa es
+ * entender en tres segundos qué es esto y empezar.
  */
 export default async function RootPage() {
   const principal = await getPrincipal();
@@ -24,32 +26,30 @@ export default async function RootPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-lg flex-col justify-center gap-8 px-6">
-      <div className="space-y-3">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dash-muted">
-          Nightlife Automatico
-        </p>
-        <h1 className="text-4xl font-black leading-tight">
+    <div className="nl-app grid min-h-dvh place-items-center px-6 py-12">
+      <div className="nl-enter w-full max-w-lg">
+        <p className="nl-eyebrow">Nightlife Automatico</p>
+
+        <h1 className="nl-display nl-h1 mt-4">
           Tu equipo vende.
           <br />
-          La IA responde.
+          <span style={{ color: "var(--nl-hot)" }}>La IA responde.</span>
         </h1>
-        <p className="text-dash-muted">
+
+        <p className="nl-muted mt-5 max-w-[42ch] text-[1.0625rem]">
           Responde las preguntas de siempre con el precio real de ahora mismo y lleva al cliente al
           checkout de tu ticketera. Sin cambiar de ticketera.
         </p>
+
+        <div className="mt-8 flex flex-wrap gap-3">
+          <ButtonLink href="/register" variant="hot" size="lg">
+            Empezar
+          </ButtonLink>
+          <ButtonLink href="/login" variant="quiet" size="lg">
+            Entrar
+          </ButtonLink>
+        </div>
       </div>
-      <div className="flex gap-3">
-        <Link
-          href="/register"
-          className="rounded-lg bg-dash-accent px-5 py-3 text-sm font-semibold text-white"
-        >
-          Crear cuenta
-        </Link>
-        <Link href="/login" className="rounded-lg border border-dash-line px-5 py-3 text-sm font-semibold">
-          Entrar
-        </Link>
-      </div>
-    </main>
+    </div>
   );
 }

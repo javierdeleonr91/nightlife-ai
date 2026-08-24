@@ -22,8 +22,23 @@ export async function createSession(user: { id: string; email: string }): Promis
   });
 }
 
+/**
+ * Cerrar sesión de verdad.
+ *
+ * Se hacen las dos cosas — borrar y además sobrescribir con un valor vacío ya
+ * caducado — porque no son equivalentes en todos los sitios: `delete` manda
+ * una cabecera sin `Max-Age`, y algún proxy o navegador con la cookie cacheada
+ * puede quedársela. Escribir `""` con `maxAge: 0` y las MISMAS opciones con
+ * las que se creó (mismo path, mismo sameSite) es lo que garantiza que se
+ * sustituye la cookie correcta y no se crea una segunda en otro path.
+ */
 export async function destroySession(): Promise<void> {
   const store = await cookies();
+  store.set(SESSION_COOKIE, "", {
+    ...SESSION_COOKIE_OPTIONS,
+    secure: env().NODE_ENV === "production",
+    maxAge: 0,
+  });
   store.delete(SESSION_COOKIE);
 }
 

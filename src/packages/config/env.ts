@@ -10,6 +10,9 @@ import { z } from "zod";
 const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   DATABASE_URL: z.string().url(),
+  // Conexión directa, sin pooler. Prisma la necesita para migraciones: con
+  // pgBouncer en medio, `migrate` falla de formas poco obvias. Ver §59.
+  DIRECT_URL: z.string().url(),
 
   /** Firma de cookies de sesión y de tokens de chat. Mínimo 32 caracteres. */
   AUTH_SECRET: z.string().min(32),

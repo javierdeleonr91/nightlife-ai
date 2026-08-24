@@ -17,6 +17,10 @@ export type AppErrorCode =
   | "SOURCE_FORBIDDEN"
   | "PARSE_FAILED"
   | "LLM_UNAVAILABLE"
+  // Una parte del producto que depende de un servicio externo que no está
+  // configurado o no responde. No es culpa de quien hace la petición, y no es
+  // permanente: por eso 503 y no 500 ni 422.
+  | "SERVICE_UNAVAILABLE"
   | "RESPONSE_REJECTED"
   | "BUDGET_EXCEEDED"
   | "INTERNAL";
@@ -32,6 +36,7 @@ const STATUS_BY_CODE: Record<AppErrorCode, number> = {
   SOURCE_FORBIDDEN: 403,
   PARSE_FAILED: 422,
   LLM_UNAVAILABLE: 503,
+  SERVICE_UNAVAILABLE: 503,
   RESPONSE_REJECTED: 500,
   BUDGET_EXCEEDED: 402,
   INTERNAL: 500,

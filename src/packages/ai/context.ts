@@ -65,10 +65,11 @@ export interface PromoterContext {
   readonly id: string;
   readonly displayName: string;
   /**
-   * Etiqueta que se añade al enlace de checkout para que la ticketera del
-   * club vea el origen. No la leemos de vuelta ni calculamos nada con ella.
+   * URL de checkout propia del promoter para el evento en foco, si Fourvenues
+   * se la dio. Nunca la componemos: o existe tal cual, o el bot enlaza al
+   * checkout del club.
    */
-  readonly referralTag?: string | null;
+  readonly checkoutUrl?: string | null;
 }
 
 export interface ConversationContext {
