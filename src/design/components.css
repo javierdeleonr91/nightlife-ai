@@ -1266,3 +1266,6 @@
   background: var(--nl-text);
   color: var(--nl-void);
 }
+
+.nl-nav__item:active { transform: scale(0.975); opacity: 0.82; }
+.nl-sheet__item:active { transform: scale(0.975); opacity: 0.82; }
