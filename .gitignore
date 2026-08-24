@@ -17,3 +17,6 @@ coverage/
 backups/
 pipeline-ejecucion.log
 RESULTS.txt
+.vercel
+.env*
+!.env.example
